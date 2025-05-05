@@ -17,6 +17,7 @@
     "d3-force": "^3.0.0",
     "framer-motion": "^12.5.0",
     "jest-mock": "^29.7.0",
+    "jwt-decode": "^4.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-force-graph-2d": "^1.27.0",

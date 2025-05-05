@@ -1,13 +1,15 @@
 from django.urls import path
-from .views import UserView, CipherView, StudyView, AssociationView, GraphView
+from .views import UserView, RandomCipherView, StudyView, GraphView, FindFontByReactionView
+from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
-    path('register/', UserView.as_view(), {'action': 'register'}, name='register'),
-    path('login/', UserView.as_view(), {'action': 'login'}, name='login'),
-    path("random-cipher", CipherView.as_view(), name="random-cipher"),
-    path("save-study", StudyView.as_view(), name="save-study"),
-    path('save-association/', AssociationView.as_view(), name='save-association'),
-    path('users/', UserView.as_view(), name='get_users'),
-    path('graph-data/', GraphView.as_view(), name='graph-data'),
-    path('user/<int:user_id>/', UserView.as_view(), name='delete_user'),
+    path('users/register/', UserView.as_view(), {'action': 'register'}, name='user-register'),
+    path('users/login/', UserView.as_view(), {'action': 'login'}, name='user-login'),
+    path('users/', UserView.as_view(), name='user-list-get'),
+    path('users/<int:user_id>/', UserView.as_view(), name='user-detail-delete'),
+    path('ciphers/random/', RandomCipherView.as_view(), name='cipher-random'),
+    path('studies/', StudyView.as_view(), name='study-save'),
+    path('graph/', GraphView.as_view(), name='graph-data'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('fonts/find-by-reaction/', FindFontByReactionView.as_view(), name='font-find-by-reaction'),
 ]

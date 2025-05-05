@@ -1,124 +1,146 @@
 import axios from "axios";
-import store from "../store/index";
+import { store } from "../store/index";
 import { setError } from "../store/errorSlice";
-import {setToken} from "../store/authSlice";
+import { setToken, clearToken, setAccessToken } from "../store/authSlice";
 
 const API = axios.create({
-    baseURL: "http://127.0.0.1:8000/api",
-    withCredentials: true,
+  baseURL: "http://127.0.0.1:8000/api",
+  headers: { "Content-Type": "application/json", Accept: "application/json" },
+  timeout: 15000,
 });
 
-// Интерсепторы для работы с токеном
-API.interceptors.request.use((config) => {
-    const token = localStorage.getItem("token");
+let isRefreshing = false;
+let failedQueue = [];
+const processQueue = (error, token = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+const refreshTokenApi = async (refresh) => {
+  try {
+    const response = await axios.post(
+      "http://127.0.0.1:8000/api/token/refresh/",
+      { refresh },
+      { headers: { "Content-Type": "application/json" } }
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Refresh token API error:", error);
+    store.dispatch(clearToken());
+    throw error;
+  }
+};
+
+API.interceptors.request.use(
+  (config) => {
+    const token = store.getState().auth.token;
     if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+      config.headers["Authorization"] = `Bearer ${token}`;
     }
     return config;
-});
-
-// Глобальная обработка ошибок
-API.interceptors.response.use(
-    (response) => response,
-    (error) => {
-        const errorMessage =
-            error.response?.data?.message || "Что-то пошло не так";
-        store.dispatch(setError(errorMessage));
-        return Promise.reject(error);
-    }
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
 );
 
-export const register = async (data) => {
-    try {
-        const response = await API.post("/register/", data);
-        return response.data;
-    } catch (error) {
-        throw error;
+API.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    const status = error.response ? error.response.status : null;
+    const refreshToken = store.getState().auth.refreshToken;
+    if (status === 401 && refreshToken && !originalRequest._retry) {
+      if (isRefreshing) {
+        return new Promise(function (resolve, reject) {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            originalRequest.headers["Authorization"] = "Bearer " + token;
+            return API(originalRequest);
+          })
+          .catch((err) => {
+            return Promise.reject(err);
+          });
+      }
+      originalRequest._retry = true;
+      isRefreshing = true;
+      try {
+        const tokenData = await refreshTokenApi(refreshToken);
+        const newAccessToken = tokenData.access;
+        store.dispatch(setAccessToken(newAccessToken));
+        API.defaults.headers.common["Authorization"] =
+          "Bearer " + newAccessToken;
+        originalRequest.headers["Authorization"] = "Bearer " + newAccessToken;
+        processQueue(null, newAccessToken);
+        return API(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError, null);
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
     }
+    const errorMessage =
+      error.response?.data?.detail ||
+      error.response?.data?.error ||
+      (typeof error.response?.data === "string" ? error.response.data : null) ||
+      (typeof error.response?.data === "object"
+        ? JSON.stringify(error.response.data)
+        : null) ||
+      error.message ||
+      "Произошла неизвестная ошибка";
+    store.dispatch(setError(errorMessage));
+    return Promise.reject(error);
+  }
+);
+
+export const register = async (userData) => {
+  const response = await API.post("/users/register/", userData);
+  return response.data;
 };
-
-export const login = async (data) => {
-    try {
-        const response = await API.post("/login/", data);
-
-        store.dispatch(setToken({
-            token: response.data.access,
-            isAdmin: response.data.is_admin
-        }));
-
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
+export const login = async (credentials) => {
+  const response = await API.post("/users/login/", credentials);
+  store.dispatch(
+    setToken({
+      access: response.data.access,
+      refresh: response.data.refresh,
+      isAdmin: response.data.is_admin,
+      user: response.data.user,
+    })
+  );
+  return response.data;
 };
-
-export const getDashboard = async () => {
-    try {
-        const response = await API.get("/dashboard/");
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
-};
-
-export const getRandomCipher = async () => {
-    try {
-        const response = await API.get("/random-cipher");
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
-};
-
-// Сохранение реакции пользователя на шрифт
-export const saveStudy = async (data) => {
-    try {
-        const response = await API.post("/save-study", {
-            cipher_id: data.cipher_id,
-            reaction_description: data.reaction_description,
-        });
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
-};
-
-export const saveAssociation = async (data) => {
-    try {
-        const response = await API.post("/save-association/", data);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
-};
-
 export const getUsers = async () => {
-    try {
-        const response = await API.get('users/');
-        return response.data;
-    } catch (error) {
-        throw new Error('Не удалось загрузить пользователей');
-    }
+  const response = await API.get("/users/");
+  return response.data;
 };
-
 export const getGraphData = async () => {
-    try {
-        const response = await API.get('/graph-data/');
-        return response.data;
-    } catch (error) {
-        throw new Error('Не удалось получить данные графа');
-    }
+  const response = await API.get("/graph/");
+  return response.data;
 };
-
 export const deleteUser = async (userId) => {
-    try {
-        const response = await API.delete(`user/${userId}/`);
-        return response.data;
-    } catch (error) {
-        throw new Error('Не удалось удалить пользователя');
-    }
+  const response = await API.delete(`/users/${userId}/`);
+  return response.data;
 };
-
-
+export const getRandomCipher = async (variationConfig) => {
+  const response = await API.post("/ciphers/random/", variationConfig);
+  return response.data;
+};
+export const saveStudy = async (studyDataArray) => {
+  const response = await API.post("/studies/", studyDataArray);
+  return response.data;
+};
+export const findFontByReaction = async (reactionDescription) => {
+  const response = await API.post("/fonts/find-by-reaction/", {
+    reaction_description: reactionDescription,
+  });
+  return response.data;
+};
 
 export default API;

@@ -1,15 +1,14 @@
-# gateway.py
-
 from .models import Study, Cipher, Association, Reaction
-from django.contrib.auth.models import User
-from django.contrib.auth import authenticate
+from django.contrib.auth import get_user_model, authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
+from .serializers import CustomTokenObtainPairSerializer # Импортируем кастомный сериализатор
+
+User = get_user_model()
 
 class StudyGateway:
-    def __init__(self, study_id=None, cipher=None, reaction=None, user=None, result=None):
+    def __init__(self, study_id=None, cipher=None, user=None, result=None):
         self.study_id = study_id
         self.cipher = cipher
-        self.reaction = reaction
         self.user = user
         self.result = result
 
@@ -17,28 +16,26 @@ class StudyGateway:
     def get_by_id(cls, study_id):
         try:
             study = Study.objects.get(id=study_id)
-            return cls(study_id=study.id, cipher=study.cipher, reaction=study.reaction, user=study.user, result=study.result)
+            return cls(study_id=study.id, cipher=study.cipher, user=study.user, result=study.result)
         except Study.DoesNotExist:
             return None
 
     def create(self):
         study = Study.objects.create(
             cipher=self.cipher,
-            reaction=self.reaction,
             user=self.user,
             result=self.result
         )
-        return StudyGateway(study_id=study.id, cipher=study.cipher, reaction=study.reaction, user=study.user, result=study.result)
+        return StudyGateway(study_id=study.id, cipher=study.cipher, user=study.user, result=study.result)
 
     def update(self):
         try:
             study = Study.objects.get(id=self.study_id)
             study.cipher = self.cipher
-            study.reaction = self.reaction
             study.user = self.user
             study.result = self.result
             study.save()
-            return StudyGateway(study_id=study.id, cipher=study.cipher, reaction=study.reaction, user=study.user, result=study.result)
+            return StudyGateway(study_id=study.id, cipher=study.cipher, user=study.user, result=study.result)
         except Study.DoesNotExist:
             return None
 
@@ -59,17 +56,18 @@ class ReactionGateway:
     @classmethod
     def get_by_description(cls, description):
         try:
-            reaction = Reaction.objects.get(description__icontains=description)
-            return cls(reaction_id=reaction.id, name=reaction.name, description=reaction.description)
+            reaction = Reaction.objects.filter(description__iexact=description).first()
+            if reaction:
+                 return cls(reaction_id=reaction.id, name=reaction.name, description=reaction.description)
+            return None
         except Reaction.DoesNotExist:
             return None
 
     @classmethod
     def get_or_create(cls, name, description):
-        """Получить или создать реакцию."""
         reaction, created = Reaction.objects.get_or_create(
-            name=name,
-            description=description
+            description=description,
+            defaults={'name': name}
         )
         return reaction, created
 
@@ -129,7 +127,6 @@ class CipherGateway:
         except Cipher.DoesNotExist:
             return False
 
-
 class AssociationGateway:
     def __init__(self, association_id=None, user=None, cipher=None, reaction_description=None):
         self.association_id = association_id
@@ -170,14 +167,19 @@ class AssociationGateway:
         except Association.DoesNotExist:
             return False
 
-
 class UserGateway:
     def __init__(self, user=None):
         self.user = user
 
     @classmethod
-    def create(cls, username, password, email):
-        user = User.objects.create_user(username=username, password=password, email=email)
+    def create(cls, username, password, email, first_name=None, last_name=None):
+        user = User.objects.create_user(
+             username=username,
+             password=password,
+             email=email,
+             first_name=first_name or '',
+             last_name=last_name or ''
+        )
         return cls(user=user)
 
     @classmethod
@@ -189,13 +191,11 @@ class UserGateway:
 
     @staticmethod
     def get_all_users():
-        """Получить всех пользователей."""
         users = User.objects.all()
         return [UserGateway(user=u) for u in users]
 
     @classmethod
     def get_by_id(cls, user_id):
-        """Получить пользователя по ID."""
         try:
             user = User.objects.get(id=user_id)
             return cls(user=user)
@@ -203,22 +203,20 @@ class UserGateway:
             return None
 
     def delete(self):
-        """Удалить пользователя."""
         if self.user:
             self.user.delete()
             return True
         return False
 
     def get_tokens(self):
-        """Получить токены для пользователя."""
         if self.user:
-            refresh = RefreshToken.for_user(self.user)
-            access_token = refresh.access_token
-            return str(refresh), str(access_token)
+            refresh = CustomTokenObtainPairSerializer.get_token(self.user)
+            access_token = str(refresh.access_token)
+            refresh_token = str(refresh)
+            return refresh_token, access_token
         return None, None
 
     def to_dict(self):
-        """Представление пользователя в виде словаря."""
         if self.user:
             return {
                 "id": self.user.id,
@@ -228,4 +226,3 @@ class UserGateway:
                 "email": self.user.email,
             }
         return None
-

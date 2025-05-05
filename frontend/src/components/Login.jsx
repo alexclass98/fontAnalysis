@@ -1,88 +1,114 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { TextField, Button, Typography, Box } from "@mui/material";
+import {
+  TextField,
+  Button,
+  Typography,
+  Box,
+  Alert,
+  Container,
+} from "@mui/material";
 import { login } from "../api/api";
 import { useDispatch } from "react-redux";
-import { setToken } from "../store/authSlice";
+import { setError } from "../store/errorSlice";
 
 const Login = () => {
-    const [username, setUsername] = useState("");
-    const [password, setPassword] = useState("");
-    const navigate = useNavigate();
-    const dispatch = useDispatch();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
 
-    // Запускаем профилирование при загрузке компонента
-    useEffect(() => {
-        const startTime = performance.now();
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoginError("");
+    dispatch(setError(null));
 
-        return () => {
-            const endTime = performance.now();
-            console.log(`Login component mounted in ${endTime - startTime} ms`);
-        };
-    }, []);
+    try {
+      await login({ username, password });
+      navigate("/");
+    } catch (error) {
+      console.error("Ошибка авторизации:", error);
+      const errorMsg =
+        error.response?.data?.error ||
+        error.response?.data?.detail ||
+        "Ошибка входа. Проверьте логин и пароль.";
+      setLoginError(errorMsg);
+      dispatch(setError(errorMsg));
+    }
+  };
 
-    const handleLogin = async (e) => {
-        e.preventDefault();
+  const handleRegisterNavigate = () => {
+    navigate("/register");
+  };
 
-        const navigationStart = performance.now();
-        try {
-            const response = await login({ username, password });
-            dispatch(setToken(response));
-
-            const apiCallEnd = performance.now();
-            console.log(`API call completed in ${apiCallEnd - navigationStart} ms`);
-
-            navigate("/");
-            const navigationEnd = performance.now();
-            console.log(`Navigation to "/" completed in ${navigationEnd - apiCallEnd} ms`);
-        } catch (error) {
-            console.error("Ошибка авторизации", error);
-        }
-    };
-
-    const handleRegisterNavigate = () => {
-        const navigationStart = performance.now();
-
-        navigate("/register");
-
-        const navigationEnd = performance.now();
-        console.log(`Navigation to "/register" completed in ${navigationEnd - navigationStart} ms`);
-    };
-
-    return (
-        <Box sx={{ width: 300, margin: "auto", textAlign: "center", mt: 5 }}>
-            <Typography variant="h4" gutterBottom>
-                Вход
+  return (
+    <Container maxWidth="xs">
+      <Box
+        sx={{
+          mt: 8,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+        }}
+      >
+        <Typography component="h1" variant="h4" gutterBottom>
+          Вход
+        </Typography>
+        {loginError && (
+          <Alert severity="error" sx={{ width: "100%", mb: 2 }}>
+            {loginError}
+          </Alert>
+        )}
+        <Box
+          component="form"
+          onSubmit={handleLogin}
+          sx={{ mt: 1, width: "100%" }}
+        >
+          <TextField
+            margin="normal"
+            required
+            fullWidth
+            id="username"
+            label="Имя пользователя или Email"
+            name="username"
+            autoComplete="username"
+            autoFocus
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+          <TextField
+            margin="normal"
+            required
+            fullWidth
+            name="password"
+            label="Пароль"
+            type="password"
+            id="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <Button
+            type="submit"
+            fullWidth
+            variant="contained"
+            sx={{ mt: 3, mb: 2 }}
+          >
+            Войти
+          </Button>
+          <Box sx={{ textAlign: "center" }}>
+            <Typography variant="body2">
+              Нет аккаунта?{" "}
+              <Button onClick={handleRegisterNavigate} size="small">
+                Зарегистрироваться
+              </Button>
             </Typography>
-            <form onSubmit={handleLogin}>
-                <TextField
-                    label="Email"
-                    type="email"
-                    fullWidth
-                    margin="normal"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                />
-                <TextField
-                    label="Пароль"
-                    type="password"
-                    fullWidth
-                    margin="normal"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                />
-                <Button type="submit" variant="contained" fullWidth sx={{ mt: 2 }}>
-                    Войти
-                </Button>
-            </form>
-            <Typography variant="body2" sx={{ mt: 2 }}>
-                Нет аккаунта?{" "}
-                <Button onClick={handleRegisterNavigate} size="small">
-                    Зарегистрироваться
-                </Button>
-            </Typography>
+          </Box>
         </Box>
-    );
+      </Box>
+    </Container>
+  );
 };
 
 export default Login;
