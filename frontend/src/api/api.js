@@ -48,7 +48,6 @@ API.interceptors.request.use(
     return Promise.reject(error);
   }
 );
-
 API.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -120,8 +119,10 @@ export const getUsers = async () => {
   const response = await API.get("/users/");
   return response.data;
 };
-export const getGraphData = async () => {
-  const response = await API.get("/graph/");
+export const getGraphData = async (aggregateByLemma = false) => {
+  const response = await API.get("/graph/", {
+    params: { aggregate_by_lemma: aggregateByLemma },
+  });
   return response.data;
 };
 export const deleteUser = async (userId) => {
@@ -136,9 +137,15 @@ export const saveStudy = async (studyDataArray) => {
   const response = await API.post("/studies/", studyDataArray);
   return response.data;
 };
-export const findFontByReaction = async (reactionDescription) => {
-  const response = await API.post("/fonts/find-by-reaction/", {
+export const findAssociationsByReaction = async (
+  reactionDescription,
+  matchExactVariation = true,
+  searchByLemma = true
+) => {
+  const response = await API.post("/associations/search/", {
     reaction_description: reactionDescription,
+    match_exact_variation: matchExactVariation,
+    search_by_lemma: searchByLemma,
   });
   return response.data;
 };

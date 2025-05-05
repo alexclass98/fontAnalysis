@@ -50,11 +50,11 @@ class AssociationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Association
         fields = [
-            'id', 'user', 'cipher', 'cipher_name', 'reaction_description',
+            'id', 'user', 'cipher', 'cipher_name', 'reaction_description', 'reaction_lemmas',
             'font_weight', 'font_style', 'letter_spacing', 'font_size', 'line_height',
             'created_at', 'variation_details', 'font_weight_display', 'font_style_display'
         ]
         read_only_fields = [
             'id', 'user', 'created_at', 'cipher_name', 'variation_details',
-            'font_weight_display', 'font_style_display'
+            'font_weight_display', 'font_style_display', 'reaction_lemmas'
         ]

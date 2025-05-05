@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { getGraphData } from "../api/api";
+import { getGraphData, findAssociationsByReaction } from "../api/api";
 import { useDispatch } from "react-redux";
 import { setError, clearError } from "../store/errorSlice";
 import {
@@ -8,14 +8,148 @@ import {
   CircularProgress,
   Paper,
   Container,
+  Grid,
+  TextField,
+  Divider,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemButton,
+  Chip,
+  Button,
+  Alert,
+  InputAdornment,
+  IconButton,
+  FormControlLabel,
+  Checkbox,
+  Switch,
+  Tooltip,
 } from "@mui/material";
+import { LoadingButton } from "@mui/lab";
+import SearchIcon from "@mui/icons-material/Search";
+import FilterListOffIcon from "@mui/icons-material/FilterListOff";
+import LanguageIcon from "@mui/icons-material/Language";
+import StyleIcon from "@mui/icons-material/Style";
 import { Network } from "vis-network/standalone/umd/vis-network.min";
 import "vis-network/styles/vis-network.css";
 
+const formatVariationDetails = (details) => {
+  if (!details) return "Нет данных";
+  const style =
+    details.font_style_display !== "Прямой" ? details.font_style_display : "";
+  return `${details.cipher_name} ${details.font_weight_display} ${style} (Spacing: ${details.letter_spacing}, Size: ${details.font_size}pt, Leading: ${details.line_height})`
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+const findNeighborhoodNodesAndEdges = (startNodeIds, allNodes, allEdges) => {
+  const initialNodes = new Map();
+  const level1Nodes = new Map();
+  const level2Nodes = new Map();
+  const finalEdges = new Map();
+
+  if (!startNodeIds || startNodeIds.length === 0 || !allNodes || !allEdges) {
+    return { nodes: [], edges: [] };
+  }
+
+  const allNodesMap = new Map(allNodes.map((node) => [node.id, node]));
+  const edgeObjects = allEdges.map((edge, index) => ({
+    ...edge,
+    id: edge.id || `edge-${index}`,
+  }));
+
+  startNodeIds.forEach((nodeId) => {
+    const node = allNodesMap.get(nodeId);
+    if (node) {
+      initialNodes.set(nodeId, node);
+    }
+  });
+
+  if (initialNodes.size === 0) return { nodes: [], edges: [] };
+
+  edgeObjects.forEach((edge) => {
+    const fromIsInitial = initialNodes.has(edge.from);
+    const toIsInitial = initialNodes.has(edge.to);
+    if (fromIsInitial && !toIsInitial) {
+      const neighborNode = allNodesMap.get(edge.to);
+      if (neighborNode && !level1Nodes.has(edge.to)) {
+        level1Nodes.set(edge.to, neighborNode);
+      }
+      if (neighborNode && !finalEdges.has(edge.id)) {
+        finalEdges.set(edge.id, edge);
+      }
+    } else if (!fromIsInitial && toIsInitial) {
+      const neighborNode = allNodesMap.get(edge.from);
+      if (neighborNode && !level1Nodes.has(edge.from)) {
+        level1Nodes.set(edge.from, neighborNode);
+      }
+      if (neighborNode && !finalEdges.has(edge.id)) {
+        finalEdges.set(edge.id, edge);
+      }
+    } else if (fromIsInitial && toIsInitial) {
+      if (!finalEdges.has(edge.id)) {
+        finalEdges.set(edge.id, edge);
+      }
+    }
+  });
+
+  edgeObjects.forEach((edge) => {
+    const fromIsL1 = level1Nodes.has(edge.from);
+    const toIsL1 = level1Nodes.has(edge.to);
+    const fromIsInitial = initialNodes.has(edge.from);
+    const toIsInitial = initialNodes.has(edge.to);
+    if (fromIsL1 && !toIsInitial && !toIsL1) {
+      const neighborNode = allNodesMap.get(edge.to);
+      if (neighborNode && !level2Nodes.has(edge.to)) {
+        level2Nodes.set(edge.to, neighborNode);
+      }
+      if (neighborNode && !finalEdges.has(edge.id)) {
+        finalEdges.set(edge.id, edge);
+      }
+    } else if (toIsL1 && !fromIsInitial && !fromIsL1) {
+      const neighborNode = allNodesMap.get(edge.from);
+      if (neighborNode && !level2Nodes.has(edge.from)) {
+        level2Nodes.set(edge.from, neighborNode);
+      }
+      if (neighborNode && !finalEdges.has(edge.id)) {
+        finalEdges.set(edge.id, edge);
+      }
+    } else if (fromIsL1 && toIsL1) {
+      if (!finalEdges.has(edge.id)) {
+        finalEdges.set(edge.id, edge);
+      }
+    }
+  });
+
+  const finalNodesMap = new Map([
+    ...initialNodes,
+    ...level1Nodes,
+    ...level2Nodes,
+  ]);
+
+  return {
+    nodes: Array.from(finalNodesMap.values()),
+    edges: Array.from(finalEdges.values()),
+  };
+};
+
 const GraphPage = () => {
-  const [graphData, setGraphData] = useState(null); // Содержит { nodes: [], links: [] }
+  const [originalGraphData, setOriginalGraphData] = useState({
+    nodes: [],
+    edges: [],
+  });
+  const [filteredGraphData, setFilteredGraphData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorState, setErrorState] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchError, setSearchError] = useState("");
+  const [filterKeyword, setFilterKeyword] = useState("");
+  const [matchExactVariation, setMatchExactVariation] = useState(true);
+  const [searchByLemma, setSearchByLemma] = useState(true);
+  const [aggregateGraphByLemma, setAggregateGraphByLemma] = useState(false);
+
   const dispatch = useDispatch();
   const visJsRef = useRef(null);
   const networkInstanceRef = useRef(null);
@@ -24,20 +158,14 @@ const GraphPage = () => {
   const processData = useCallback((data) => {
     const nodesMap = new Map();
     const nodeDegrees = new Map();
-    const linkCountMap = new Map();
-
-    if (!Array.isArray(data) || data.length === 0) {
-      return { nodes: [], links: [] };
-    }
-
-    data.forEach((item) => {
-      if (!item.name || !item.description) {
-        return;
-      }
+    const linkMap = new Map();
+    if (!Array.isArray(data) || data.length === 0)
+      return { nodes: [], edges: [] };
+    data.forEach((item, index) => {
+      if (!item.name || !item.description) return;
       const sourceId = item.name;
       const targetId = item.description;
       const count = item.count || 1;
-
       if (!nodesMap.has(sourceId)) {
         nodesMap.set(sourceId, {
           id: sourceId,
@@ -58,14 +186,19 @@ const GraphPage = () => {
         });
         nodeDegrees.set(targetId, 0);
       }
-
       nodeDegrees.set(sourceId, nodeDegrees.get(sourceId) + count);
       nodeDegrees.set(targetId, nodeDegrees.get(targetId) + count);
-
       const linkKey = `${sourceId}--->${targetId}`;
-      linkCountMap.set(linkKey, count);
+      const edgeId = `edge-${linkKey}-${index}`;
+      linkMap.set(edgeId, {
+        id: edgeId,
+        from: sourceId,
+        to: targetId,
+        label: String(count),
+        value: count,
+        title: `<b>Связь:</b> ${sourceId} - ${targetId}<br>Количество: ${count}`,
+      });
     });
-
     const nodes = Array.from(nodesMap.values()).map((node) => ({
       ...node,
       value: 1 + Math.log1p(nodeDegrees.get(node.id) || 0) * 5,
@@ -73,40 +206,27 @@ const GraphPage = () => {
         node.id
       }<br>Связей (взвеш.): ${nodeDegrees.get(node.id) || 0}`,
     }));
-
-    // Имя переменной `links` остается, но это просто массив ребер
-    const links = Array.from(linkCountMap.entries()).map(([linkKey, count]) => {
-      const [from, to] = linkKey.split("--->");
-      return {
-        from,
-        to,
-        label: String(count),
-        value: count,
-        title: `<b>Связь:</b> ${from} - ${to}<br>Количество: ${count}`,
-      };
-    });
-
-    // Возвращаем объект с nodes и links
-    return { nodes, links };
+    return { nodes, edges: Array.from(linkMap.values()) };
   }, []);
 
+  const fetchGraphData = useCallback(async () => {
+    setLoading(true);
+    setErrorState(null);
+    dispatch(clearError());
+    try {
+      const response = await getGraphData(aggregateGraphByLemma);
+      const processedData = processData(response);
+      setOriginalGraphData(processedData);
+      setFilteredGraphData(null);
+    } catch (error) {
+      console.error("Graph data fetch error:", error);
+      setErrorState("Не удалось загрузить данные для графа");
+    } finally {
+      setLoading(false);
+    }
+  }, [dispatch, processData, aggregateGraphByLemma]);
+
   useEffect(() => {
-    const fetchGraphData = async () => {
-      setLoading(true);
-      setErrorState(null);
-      dispatch(clearError());
-      try {
-        const response = await getGraphData();
-        const processedData = processData(response);
-        setGraphData(processedData); // Сохраняем { nodes, links }
-      } catch (error) {
-        console.error("Graph data fetch error:", error);
-        const errorMsg = "Не удалось загрузить данные для графа";
-        setErrorState(errorMsg);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchGraphData();
     return () => {
       if (networkInstanceRef.current) {
@@ -114,17 +234,88 @@ const GraphPage = () => {
         networkInstanceRef.current = null;
       }
     };
-  }, [dispatch, processData]);
+  }, [fetchGraphData]);
+
+  const handleSearch = async () => {
+    if (!searchTerm.trim()) return;
+    setSearchLoading(true);
+    setSearchResults([]);
+    setSearchError("");
+    dispatch(clearError());
+    try {
+      const results = await findAssociationsByReaction(
+        searchTerm.trim(),
+        matchExactVariation,
+        searchByLemma
+      );
+      setSearchResults(results);
+      if (results.length === 0) {
+        setSearchError("Результаты не найдены.");
+      }
+    } catch (error) {
+      console.error("Association search error", error);
+      setSearchError(error.response?.data?.error || "Ошибка поиска.");
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleFilterChange = (event) => {
+    setFilterKeyword(event.target.value);
+  };
+  const applyFilter = useCallback(
+    (keyword) => {
+      if (!keyword?.trim()) {
+        setFilteredGraphData(null);
+        return;
+      }
+      const lowerKeyword = keyword.toLowerCase();
+      const matchedNodes = originalGraphData.nodes.filter(
+        (node) =>
+          node.id.toLowerCase().includes(lowerKeyword) ||
+          node.label?.toLowerCase().includes(lowerKeyword)
+      );
+      if (matchedNodes.length > 0) {
+        const startNodeIds = matchedNodes.map((n) => n.id);
+        const relatedData = findNeighborhoodNodesAndEdges(
+          startNodeIds,
+          originalGraphData.nodes,
+          originalGraphData.edges
+        );
+        setFilteredGraphData(relatedData);
+      } else {
+        setFilteredGraphData({ nodes: [], edges: [] });
+      }
+    },
+    [originalGraphData]
+  );
+  const handleFilterSubmit = (event) => {
+    event.preventDefault();
+    applyFilter(filterKeyword);
+  };
+  const handleResetFilter = () => {
+    setFilterKeyword("");
+    setFilteredGraphData(null);
+  };
+  const handleResultClick = (result) => {
+    const cn = result.details?.cipher_name;
+    if (cn) {
+      setFilterKeyword(cn);
+      applyFilter(cn);
+    }
+  };
+  const handleAggregateToggle = (event) => {
+    setAggregateGraphByLemma(event.target.checked);
+  };
 
   useEffect(() => {
     let network = null;
     let resizeObserver = null;
-
-    // Проверяем наличие graphData и обязательных полей nodes и links
+    const dataToRender = filteredGraphData || originalGraphData;
     if (
-      graphData &&
-      graphData.nodes &&
-      graphData.links &&
+      dataToRender &&
+      dataToRender.nodes &&
+      dataToRender.edges &&
       visJsRef.current &&
       !loading &&
       !errorState
@@ -150,14 +341,14 @@ const GraphPage = () => {
         edges: {
           font: { color: "#555555", size: 10, strokeWidth: 0, align: "middle" },
           scaling: { min: 0.5, max: 6, label: { enabled: false } },
-          width: 1, // Базовая ширина ребра
+          width: 1,
           smooth: { enabled: true, type: "continuous", roundness: 0.5 },
           color: {
             color: "#aaaaaa",
             highlight: "#777777",
             hover: "#555555",
             inherit: false,
-          }, // Сделали цвет чуть темнее
+          },
           arrows: { to: { enabled: false } },
           hoverWidth: function (width) {
             return width * 1.5;
@@ -170,17 +361,17 @@ const GraphPage = () => {
           enabled: true,
           solver: "forceAtlas2Based",
           forceAtlas2Based: {
-            gravitationalConstant: -45,
-            centralGravity: 0.01,
-            springLength: 120,
-            springConstant: 0.07,
-            damping: 0.7,
-            avoidOverlap: 0.8,
+            gravitationalConstant: -50,
+            centralGravity: 0.015,
+            springLength: 130,
+            springConstant: 0.06,
+            damping: 0.75,
+            avoidOverlap: 0.85,
           },
           stabilization: {
             enabled: true,
             iterations: 500,
-            updateInterval: 25,
+            updateInterval: 30,
             onlyDynamicEdges: false,
             fit: true,
           },
@@ -207,17 +398,8 @@ const GraphPage = () => {
         },
         layout: { improvedLayout: true },
       };
-
       try {
-        // ---- ИЗМЕНЕНИЕ ЗДЕСЬ ----
-        // Создаем новый объект для vis-network с правильными ключами
-        const networkData = {
-          nodes: graphData.nodes,
-          edges: graphData.links, // Используем ключ 'edges' и передаем массив 'links'
-        };
-        network = new Network(visJsRef.current, networkData, options);
-        // ------------------------
-
+        network = new Network(visJsRef.current, dataToRender, options);
         networkInstanceRef.current = network;
         network.on("stabilizationIterationsDone", () =>
           console.log("Graph stabilization finished.")
@@ -227,7 +409,6 @@ const GraphPage = () => {
           setErrorState("Ошибка при отрисовке графа");
           dispatch(setError("Ошибка при работе с графом vis-network"));
         });
-
         if (containerRef.current) {
           resizeObserver = new ResizeObserver(() => {
             if (networkInstanceRef.current) {
@@ -243,7 +424,6 @@ const GraphPage = () => {
         dispatch(setError("Не удалось создать визуализацию графа"));
       }
     }
-
     return () => {
       if (resizeObserver) resizeObserver.disconnect();
       if (networkInstanceRef.current) {
@@ -251,92 +431,295 @@ const GraphPage = () => {
         networkInstanceRef.current = null;
       }
     };
-    // Добавили graphData в зависимости, чтобы useEffect сработал при получении данных
-  }, [graphData, loading, errorState, dispatch]);
+  }, [filteredGraphData, originalGraphData, loading, errorState, dispatch]);
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
-      <Paper
-        ref={containerRef}
-        elevation={3}
-        sx={{
-          p: { xs: 1, sm: 2, md: 4 },
-          height: "85vh",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
-      >
-        <Typography
-          variant="h4"
-          component="h1"
-          gutterBottom
-          align="center"
-          sx={{ flexShrink: 0, fontSize: { xs: "1.5rem", sm: "2rem" } }}
+    <Container maxWidth="xl" sx={{ py: 2 }}>
+      <Grid container spacing={2} sx={{ height: "calc(100vh - 64px - 32px)" }}>
+        <Grid
+          item
+          xs={12}
+          md={4}
+          lg={3}
+          sx={{ display: "flex", flexDirection: "column", height: "100%" }}
         >
-          Визуализация реакций на шрифты
-        </Typography>
-        <Box
-          sx={{
-            flexGrow: 1,
-            position: "relative",
-            border: "1px solid #eee",
-            borderRadius: 1,
-            overflow: "hidden",
-          }}
-        >
-          {loading && (
+          <Paper
+            elevation={2}
+            sx={{
+              p: 2,
+              display: "flex",
+              flexDirection: "column",
+              flexGrow: 1,
+              overflow: "hidden",
+            }}
+          >
+            <Typography variant="h6" gutterBottom>
+              Поиск вариаций
+            </Typography>
             <Box
-              display="flex"
-              justifyContent="center"
-              alignItems="center"
-              sx={{
-                height: "100%",
-                position: "absolute",
-                width: "100%",
-                zIndex: 1,
-                backgroundColor: "rgba(255, 255, 255, 0.7)",
+              component="form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSearch();
               }}
+              sx={{ display: "flex", flexDirection: "column", gap: 1, mb: 1 }}
             >
-              <CircularProgress size={60} />
-            </Box>
-          )}
-          {errorState && !loading && (
-            <Box
-              display="flex"
-              justifyContent="center"
-              alignItems="center"
-              sx={{ height: "100%" }}
-            >
-              <Typography color="error">{errorState}</Typography>
-            </Box>
-          )}
-          {!loading &&
-            graphData &&
-            graphData.nodes.length === 0 &&
-            !errorState && (
+              <TextField
+                fullWidth
+                size="small"
+                label="Введите реакцию"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                disabled={searchLoading}
+              />
               <Box
-                display="flex"
-                justifyContent="center"
-                alignItems="center"
-                sx={{ height: "100%" }}
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: 1,
+                }}
               >
-                <Typography sx={{ textAlign: "center", mt: 4 }}>
-                  Нет данных для отображения графа.
-                </Typography>
+                <Tooltip title="Учитывать вариации (стиль, вес...)">
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={matchExactVariation}
+                        onChange={(e) =>
+                          setMatchExactVariation(e.target.checked)
+                        }
+                      />
+                    }
+                    label={<StyleIcon fontSize="small" />}
+                    sx={{ "& .MuiTypography-root": { fontSize: "0.8rem" } }}
+                  />
+                </Tooltip>
+                <Tooltip title="Искать по смыслу (леммам)">
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={searchByLemma}
+                        onChange={(e) => setSearchByLemma(e.target.checked)}
+                      />
+                    }
+                    label={<LanguageIcon fontSize="small" />}
+                    sx={{ "& .MuiTypography-root": { fontSize: "0.8rem" } }}
+                  />
+                </Tooltip>
               </Box>
+              <LoadingButton
+                type="submit"
+                variant="contained"
+                size="small"
+                loading={searchLoading}
+                disabled={!searchTerm.trim()}
+                startIcon={<SearchIcon />}
+              >
+                {" "}
+                Найти{" "}
+              </LoadingButton>
+            </Box>
+            {searchError && (
+              <Alert
+                severity="warning"
+                sx={{ fontSize: "0.8rem", py: 0.5, px: 1, mb: 1 }}
+              >
+                {searchError}
+              </Alert>
             )}
-          {/* Контейнер для графа */}
-          <Box
-            ref={visJsRef}
+            <Box sx={{ flexGrow: 1, overflowY: "auto", minHeight: 150 }}>
+              <List dense disablePadding>
+                {" "}
+                {searchResults.map((result, index) => (
+                  <ListItemButton
+                    key={result.details?.id || index}
+                    sx={{
+                      px: 1,
+                      py: 0.5,
+                      "&:hover": { bgcolor: "action.hover" },
+                    }}
+                    onClick={() => handleResultClick(result)}
+                  >
+                    {" "}
+                    <ListItemText
+                      primary={
+                        result.aggregated_by_font_only
+                          ? result.details?.cipher_name
+                          : formatVariationDetails(result.details)
+                      }
+                      secondary={`Совпадение: ${result.percentage}% (${
+                        result.score
+                      } ${result.score === 1 ? "р." : "р."}) ${
+                        result.aggregated_by_font_only ? "(по шрифту)" : ""
+                      }`}
+                      primaryTypographyProps={{
+                        variant: "body2",
+                        noWrap: true,
+                        title: result.aggregated_by_font_only
+                          ? result.details?.cipher_name
+                          : formatVariationDetails(result.details),
+                      }}
+                      secondaryTypographyProps={{ variant: "caption" }}
+                    />{" "}
+                  </ListItemButton>
+                ))}{" "}
+                {!searchLoading &&
+                  searchResults.length === 0 &&
+                  !searchError &&
+                  searchTerm && (
+                    <Typography
+                      variant="caption"
+                      sx={{ p: 1, display: "block", textAlign: "center" }}
+                    >
+                      Результатов нет.
+                    </Typography>
+                  )}{" "}
+              </List>
+            </Box>
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="h6" gutterBottom>
+              Фильтр графа
+            </Typography>
+            <Box
+              component="form"
+              onSubmit={handleFilterSubmit}
+              sx={{ display: "flex", gap: 1, mb: 1 }}
+            >
+              {" "}
+              <TextField
+                fullWidth
+                size="small"
+                label="Фильтр по узлам"
+                value={filterKeyword}
+                onChange={handleFilterChange}
+                InputProps={{
+                  endAdornment: filterKeyword && (
+                    <InputAdornment position="end">
+                      {" "}
+                      <IconButton
+                        size="small"
+                        onClick={handleResetFilter}
+                        title="Сбросить фильтр"
+                      >
+                        {" "}
+                        <FilterListOffIcon fontSize="small" />{" "}
+                      </IconButton>{" "}
+                    </InputAdornment>
+                  ),
+                }}
+              />{" "}
+              <Button
+                type="submit"
+                variant="outlined"
+                size="small"
+                disabled={!filterKeyword.trim()}
+              >
+                {" "}
+                Фильтр{" "}
+              </Button>{" "}
+            </Box>
+            <Tooltip
+              title={
+                aggregateGraphByLemma
+                  ? "Узлы реакций сгруппированы по смыслу (леммам)"
+                  : "Узлы реакций отображают оригинальный текст"
+              }
+            >
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={aggregateGraphByLemma}
+                    onChange={handleAggregateToggle}
+                  />
+                }
+                label="Леммы в графе"
+                sx={{ "& .MuiTypography-root": { fontSize: "0.8rem" } }}
+              />
+            </Tooltip>
+          </Paper>
+        </Grid>
+        <Grid item xs={12} md={8} lg={9} sx={{ height: "100%" }}>
+          <Paper
+            ref={containerRef}
+            elevation={3}
             sx={{
               height: "100%",
-              width: "100%",
-              visibility: loading || errorState ? "hidden" : "visible",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
             }}
-          />
-        </Box>
-      </Paper>
+          >
+            <Box
+              sx={{
+                flexGrow: 1,
+                position: "relative",
+                border: "1px solid #eee",
+                borderRadius: 1,
+                overflow: "hidden",
+              }}
+            >
+              {loading && (
+                <Box
+                  display="flex"
+                  justifyContent="center"
+                  alignItems="center"
+                  sx={{
+                    height: "100%",
+                    position: "absolute",
+                    width: "100%",
+                    zIndex: 1,
+                    backgroundColor: "rgba(255, 255, 255, 0.7)",
+                  }}
+                >
+                  {" "}
+                  <CircularProgress size={60} />{" "}
+                </Box>
+              )}
+              {errorState && !loading && (
+                <Box
+                  display="flex"
+                  justifyContent="center"
+                  alignItems="center"
+                  sx={{ height: "100%" }}
+                >
+                  {" "}
+                  <Typography color="error">{errorState}</Typography>{" "}
+                </Box>
+              )}
+              {!loading &&
+                (originalGraphData.nodes.length === 0 ||
+                  (filteredGraphData &&
+                    filteredGraphData.nodes.length === 0)) &&
+                !errorState && (
+                  <Box
+                    display="flex"
+                    justifyContent="center"
+                    alignItems="center"
+                    sx={{ height: "100%" }}
+                  >
+                    {" "}
+                    <Typography sx={{ textAlign: "center", mt: 4 }}>
+                      {" "}
+                      {filteredGraphData
+                        ? "Узлы по фильтру не найдены."
+                        : "Нет данных для отображения графа."}{" "}
+                    </Typography>{" "}
+                  </Box>
+                )}
+              <Box
+                ref={visJsRef}
+                sx={{
+                  height: "100%",
+                  width: "100%",
+                  visibility: loading || errorState ? "hidden" : "visible",
+                }}
+              />
+            </Box>
+          </Paper>
+        </Grid>
+      </Grid>
     </Container>
   );
 };

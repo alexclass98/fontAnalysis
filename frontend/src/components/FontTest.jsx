@@ -30,9 +30,9 @@ import HourglassBottom from "@mui/icons-material/HourglassBottom";
 import Logout from "@mui/icons-material/Logout";
 import SettingsIcon from "@mui/icons-material/Settings";
 import AddCircleOutline from "@mui/icons-material/AddCircleOutline";
-import DeleteOutline from "@mui/icons-material/DeleteOutline"; // Иконка для удаления
+import DeleteOutline from "@mui/icons-material/DeleteOutline";
 
-const MAX_QUESTIONS = 5;
+const MAX_QUESTIONS = 20;
 const defaultVariationConfig = {
   vary_weight: true,
   vary_style: true,

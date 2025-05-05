@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import UserView, RandomCipherView, StudyView, GraphView, FindFontByReactionView
+from .views import UserView, RandomCipherView, StudyView, GraphView, AssociationSearchView
 from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
@@ -11,5 +11,5 @@ urlpatterns = [
     path('studies/', StudyView.as_view(), name='study-save'),
     path('graph/', GraphView.as_view(), name='graph-data'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('fonts/find-by-reaction/', FindFontByReactionView.as_view(), name='font-find-by-reaction'),
+    path('associations/search/', AssociationSearchView.as_view(), name='association-search'),
 ]

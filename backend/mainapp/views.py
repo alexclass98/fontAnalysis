@@ -1,6 +1,7 @@
 from django.http import JsonResponse
 from django.views import View
 from django.contrib.auth import get_user_model
+from django.db.models import Count
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
@@ -8,6 +9,7 @@ from rest_framework import status
 from .models import Study, Cipher, Association, Administrator
 from .gateway import UserGateway
 from .serializers import RegisterSerializer, LoginSerializer, CipherSerializer, AssociationSerializer
+from .utils import get_lemmas
 import random
 import itertools
 
@@ -103,7 +105,6 @@ class StudyView(APIView):
             if "error" in result: errors.append(result)
             elif not result.get("skipped"): results.append(result)
         status_code = status.HTTP_207_MULTI_STATUS if errors and results else (status.HTTP_400_BAD_REQUEST if errors else status.HTTP_201_CREATED)
-        # Возвращаем сообщение об успехе, если нет критических ошибок
         message = "Сохранение завершено." if not errors or results else "Сохранение завершено с ошибками."
         return Response({"message": message, "saved": results, "errors": errors}, status=status_code)
     def _save_single_study(self, study_data, user):
@@ -115,10 +116,14 @@ class StudyView(APIView):
         if font_weight not in FONT_WEIGHTS or font_style not in FONT_STYLES: return {"error": "Недопустимые значения weight или style", "data": study_data}
         try:
             cipher = Cipher.objects.get(id=cipher_id)
+            lemmas = get_lemmas(reaction_description)
             association, created = Association.objects.get_or_create(
                 user=user, cipher=cipher, font_weight=font_weight, font_style=font_style, letter_spacing=letter_spacing, font_size=font_size, line_height=line_height,
-                defaults={'reaction_description': reaction_description})
-            if not created and association.reaction_description is None: association.reaction_description = reaction_description; association.save()
+                defaults={'reaction_description': reaction_description, 'reaction_lemmas': lemmas})
+            if not created and association.reaction_description is None:
+                 association.reaction_description = reaction_description
+                 association.reaction_lemmas = lemmas
+                 association.save()
             elif not created: return {"error": "Повторная реакция на ту же вариацию", "skipped": True, "data": study_data}
             return {"association_id": association.id}
         except Cipher.DoesNotExist: return {"error": f"Базовый шрифт с ID {cipher_id} не найден", "data": study_data}
@@ -126,23 +131,55 @@ class StudyView(APIView):
 
 class GraphView(View):
      def get(self, request):
-        associations = Association.objects.select_related('cipher').filter(reaction_description__isnull=False).exclude(reaction_description__exact='').exclude(reaction_description__exact='[skipped]')
-        frequency = {};
-        for assoc in associations:
-            if not assoc.cipher: continue
-            key = (assoc.cipher.result, assoc.reaction_description)
-            frequency[key] = frequency.get(key, 0) + 1
-        data = [{'name': name, 'description': desc, 'count': count} for (name, desc), count in frequency.items() if name and desc]
-        return JsonResponse(data, safe=False)
+         aggregate_by_lemma = request.GET.get('aggregate_by_lemma', 'false').lower() == 'true'
+         base_query = Association.objects.select_related('cipher').filter(reaction_description__isnull=False).exclude(reaction_description__exact='')
+         if aggregate_by_lemma:
+             base_query = base_query.exclude(reaction_lemmas__isnull=True).exclude(reaction_lemmas__exact='')
+             associations_data = base_query.values('cipher__result', 'reaction_lemmas')
+             description_field = 'reaction_lemmas'
+         else:
+             associations_data = base_query.values('cipher__result', 'reaction_description')
+             description_field = 'reaction_description'
+         frequency = {}
+         for assoc_data in associations_data:
+             font_name = assoc_data.get('cipher__result')
+             desc = assoc_data.get(description_field)
+             if not font_name or not desc: continue
+             key = (font_name, desc)
+             frequency[key] = frequency.get(key, 0) + 1
+         data = [{'name': name, 'description': desc, 'count': count} for (name, desc), count in frequency.items()]
+         return JsonResponse(data, safe=False)
 
-class FindFontByReactionView(APIView):
+class AssociationSearchView(APIView):
     permission_classes = [IsAuthenticated]
     def post(self, request):
-        reaction_description = request.data.get('reaction_description')
-        if not reaction_description or not isinstance(reaction_description, str) or not reaction_description.strip():
-            return Response({"error": "Поле 'reaction_description' обязательно."}, status=status.HTTP_400_BAD_REQUEST)
-        association = Association.objects.filter(reaction_description__iexact=reaction_description.strip()).select_related('cipher').order_by('-created_at').first()
-        if not association: return Response({"error": "Ассоциация для данной реакции не найдена."}, status=status.HTTP_404_NOT_FOUND)
-        serializer = AssociationSerializer(association)
-        response_data = {"message": "Ассоциация найдена!", "font_name": association.cipher.result, "variation_details": serializer.data}
-        return Response(response_data, status=status.HTTP_200_OK)
+        search_term = request.data.get('reaction_description', '').strip()
+        match_exact_variation = request.data.get('match_exact_variation', True)
+        search_by_lemma = request.data.get('search_by_lemma', True)
+        if not search_term: return Response({"error": "Необходимо указать текст реакции для поиска."}, status=status.HTTP_400_BAD_REQUEST)
+        if search_by_lemma:
+            search_lemmas = get_lemmas(search_term)
+            if not search_lemmas: filter_kwargs = {'reaction_description__iexact': search_term}
+            else: filter_kwargs = {'reaction_lemmas__icontains': search_lemmas}
+        else: filter_kwargs = {'reaction_description__iexact': search_term}
+        matching_associations = Association.objects.filter(**filter_kwargs).select_related('cipher')
+        if not matching_associations.exists(): return Response({"error": "Ассоциации не найдены."}, status=status.HTTP_404_NOT_FOUND)
+        if match_exact_variation:
+            grouping_fields = ['cipher_id', 'cipher__result', 'font_weight', 'font_style', 'letter_spacing', 'font_size', 'line_height']
+            value_fields = ['cipher_id', 'font_weight', 'font_style', 'letter_spacing', 'font_size', 'line_height']
+        else:
+            grouping_fields = ['cipher_id', 'cipher__result']
+            value_fields = ['cipher_id']
+        variation_counts = matching_associations.values(*grouping_fields).annotate(score=Count('id')).order_by('-score')
+        if not variation_counts: return Response({"error": "Не удалось агрегировать результаты."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        top_results_data = []; max_score = variation_counts[0]['score'] if variation_counts else 0
+        for variation_group in variation_counts[:5]:
+            filter_kwargs_repr = {}
+            for field in value_fields:
+                filter_kwargs_repr[field] = variation_group[field]
+            representative_assoc = matching_associations.filter(**filter_kwargs_repr).order_by('-created_at').first()
+            if representative_assoc:
+                serializer = AssociationSerializer(representative_assoc)
+                percentage = (variation_group['score'] / max_score * 100) if max_score > 0 else 0
+                top_results_data.append({"score": variation_group['score'], "percentage": round(percentage, 1), "details": serializer.data, "aggregated_by_font_only": not match_exact_variation})
+        return Response(top_results_data, status=status.HTTP_200_OK)
