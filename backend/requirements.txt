@@ -60,7 +60,6 @@ pyzmq==26.4.0
 requests==2.32.3
 requests-oauthlib==2.0.0
 rich==14.0.0
-ru_core_news_lg @ https://github.com/explosion/spacy-models/releases/download/ru_core_news_lg-3.8.0/ru_core_news_lg-3.8.0-py3-none-any.whl
 ru_core_news_sm @ https://github.com/explosion/spacy-models/releases/download/ru_core_news_sm-3.8.0/ru_core_news_sm-3.8.0-py3-none-any.whl
 shellingham==1.5.4
 smart-open==7.1.0

@@ -4,7 +4,7 @@ import logging
 logger = logging.getLogger(__name__)
 nlp = None
 
-def load_spacy_model(model_name="ru_core_news_lg"):
+def load_spacy_model(model_name="ru_core_news_sm"):
     global nlp
     if nlp is None:
         try:
