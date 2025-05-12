@@ -6,7 +6,7 @@ import { setToken, clearToken, setAccessToken } from "../store/authSlice";
 const API = axios.create({
   baseURL: (process.env.REACT_APP_API_URL || "http://localhost:8000") + "/api",
   headers: { "Content-Type": "application/json", Accept: "application/json" },
-  timeout: 15000,
+  timeout: 60000,
 });
 
 let isRefreshing = false;
