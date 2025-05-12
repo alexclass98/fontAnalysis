@@ -74,7 +74,7 @@ const HomePage = () => {
         <Typography variant="body1" gutterBottom sx={{ fontSize: "1.1rem" }}>
           {" "}
           Научный руководитель:{" "}
-          <strong>к.т.н. Филиппович Андрей Юрьевич</strong>{" "}
+          <strong>к.т.н. Филиппович Анна Юрьевна</strong>{" "}
         </Typography>
         <Typography variant="body1" sx={{ fontSize: "1.1rem", mb: 4 }}>
           {" "}

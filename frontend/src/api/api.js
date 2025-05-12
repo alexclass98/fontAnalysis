@@ -4,7 +4,7 @@ import { setError } from "../store/errorSlice";
 import { setToken, clearToken, setAccessToken } from "../store/authSlice";
 
 const API = axios.create({
-  baseURL: "http://127.0.0.1:8000/api",
+  baseURL: (process.env.REACT_APP_API_URL || "http://localhost:8000") + "/api",
   headers: { "Content-Type": "application/json", Accept: "application/json" },
   timeout: 15000,
 });
@@ -24,7 +24,8 @@ const processQueue = (error, token = null) => {
 const refreshTokenApi = async (refresh) => {
   try {
     const response = await axios.post(
-      "http://127.0.0.1:8000/api/token/refresh/",
+      (process.env.REACT_APP_API_URL || "http://localhost:8000") +
+        "/api/token/refresh/",
       { refresh },
       { headers: { "Content-Type": "application/json" } }
     );
@@ -39,7 +40,8 @@ const refreshTokenApi = async (refresh) => {
 API.interceptors.request.use(
   (config) => {
     const token = store.getState().auth.token;
-    if (token) {
+    const isRegisterRequest = config.url === "/users/register/";
+    if (token && !isRegisterRequest) {
       config.headers["Authorization"] = `Bearer ${token}`;
     }
     return config;
@@ -48,6 +50,7 @@ API.interceptors.request.use(
     return Promise.reject(error);
   }
 );
+
 API.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -94,7 +97,9 @@ API.interceptors.response.use(
         : null) ||
       error.message ||
       "Произошла неизвестная ошибка";
-    store.dispatch(setError(errorMessage));
+    if (!(status === 401 && originalRequest.url === "/users/login/")) {
+      store.dispatch(setError(errorMessage));
+    }
     return Promise.reject(error);
   }
 );
