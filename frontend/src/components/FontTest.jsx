@@ -65,7 +65,6 @@ const FontTest = () => {
   const questionTimerRef = useRef(null);
   const isMounted = useRef(true);
 
-  // --- Логика Жизненного Цикла и Запросов (без изменений) ---
   useEffect(() => {
     isMounted.current = true;
     dispatch(clearError());
@@ -167,7 +166,7 @@ const FontTest = () => {
         clearInterval(intervalId);
       }
     };
-  }, [currentQuestion, currentVariation, isLoading, testFinishedMessage]); // Убрали handleNextQuestion
+  }, [currentQuestion, currentVariation, isLoading, testFinishedMessage]);
 
   const finishTestAndSave = useCallback(async () => {
     if (isSaving || !isMounted.current) return;
@@ -237,7 +236,6 @@ const FontTest = () => {
         ]);
       }
       setReaction("");
-      setCustomTexts([]);
       setNewText("");
       if (currentQuestion < MAX_QUESTIONS && !testFinishedMessage) {
         if (isMounted.current) {
@@ -261,7 +259,6 @@ const FontTest = () => {
     ]
   );
 
-  // --- Функции Обработки Взаимодействия ---
   const handleVariationChange = (event) => {
     setVariationConfig({
       ...variationConfig,
@@ -283,33 +280,29 @@ const FontTest = () => {
       setNewText("");
     }
   };
-  // Новая функция для удаления кастомного текста
   const handleDeleteCustomText = (indexToDelete) => {
     setCustomTexts((prev) =>
       prev.filter((_, index) => index !== indexToDelete)
     );
   };
 
-  // --- Рендеринг Заглушек ---
   if (!currentUser) {
     return <Navigate to="/login" replace />;
   }
   if (testFinishedMessage && !isSaving) {
     return (
       <Container maxWidth="sm" sx={{ py: 4, textAlign: "center" }}>
-        {" "}
         <Paper elevation={3} sx={{ p: 4 }}>
-          {" "}
           <Typography variant="h5" gutterBottom>
             Тестирование завершено!
-          </Typography>{" "}
+          </Typography>
           <Typography variant="body1" sx={{ my: 2 }}>
             {testFinishedMessage}
-          </Typography>{" "}
+          </Typography>
           <Button variant="contained" onClick={() => navigate("/")}>
             На главную
-          </Button>{" "}
-        </Paper>{" "}
+          </Button>
+        </Paper>
       </Container>
     );
   }
@@ -319,21 +312,17 @@ const FontTest = () => {
   ) {
     return (
       <Container maxWidth="sm" sx={{ py: 4, textAlign: "center" }}>
-        {" "}
         <Paper elevation={3} sx={{ p: 4 }}>
-          {" "}
           <Typography variant="h5" gutterBottom>
-            {" "}
-            {isSaving ? "Сохранение..." : "Завершение..."}{" "}
-          </Typography>{" "}
-          <CircularProgress sx={{ my: 2 }} />{" "}
-          {!isSaving && <Typography>Подготовка...</Typography>}{" "}
-        </Paper>{" "}
+            {isSaving ? "Сохранение..." : "Завершение..."}
+          </Typography>
+          <CircularProgress sx={{ my: 2 }} />
+          {!isSaving && <Typography>Подготовка...</Typography>}
+        </Paper>
       </Container>
     );
   }
 
-  // --- Стили и Данные для Отображения ---
   const textStyles = currentVariation
     ? {
         fontFamily: currentVariation.result || "sans-serif",
@@ -343,7 +332,7 @@ const FontTest = () => {
         fontSize: `${currentVariation.font_size || 16}pt`,
         lineHeight: currentVariation.line_height || 1.5,
         transition: "all 0.3s ease-out",
-        wordBreak: "break-word", // Добавили перенос слов
+        wordBreak: "break-word",
       }
     : {};
   const variationDisplayName = currentVariation
@@ -358,11 +347,8 @@ const FontTest = () => {
         .trim()
     : "Загрузка...";
 
-  // --- Основной Рендеринг Компонента ---
   return (
     <Container maxWidth="lg" sx={{ py: 3 }}>
-      {" "}
-      {/* Уменьшили вертикальный отступ */}
       <Box
         sx={{
           mb: 2,
@@ -380,8 +366,7 @@ const FontTest = () => {
             fontSize: { xs: "1.6rem", sm: "2rem", md: "2.2rem" },
           }}
         >
-          {" "}
-          Тестирование шрифтов{" "}
+          Тестирование шрифтов
         </Typography>
         <Tooltip title="Настройки вариаций">
           <IconButton onClick={() => setShowSettings(!showSettings)}>
@@ -390,21 +375,17 @@ const FontTest = () => {
         </Tooltip>
       </Box>
       <AnimatePresence>
-        {" "}
         {showSettings && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
           >
-            {" "}
             <Paper sx={{ p: 1.5, mb: 2, bgcolor: "grey.50" }} elevation={0}>
-              {" "}
               <Typography variant="caption" display="block" gutterBottom>
                 Варьировать:
-              </Typography>{" "}
+              </Typography>
               <FormGroup row sx={{ flexWrap: "wrap", gap: 0.5 }}>
-                {" "}
                 <FormControlLabel
                   sx={{ mr: 1 }}
                   control={
@@ -416,7 +397,7 @@ const FontTest = () => {
                     />
                   }
                   label="Начертание"
-                />{" "}
+                />
                 <FormControlLabel
                   sx={{ mr: 1 }}
                   control={
@@ -428,7 +409,7 @@ const FontTest = () => {
                     />
                   }
                   label="Стиль"
-                />{" "}
+                />
                 <FormControlLabel
                   sx={{ mr: 1 }}
                   control={
@@ -440,7 +421,7 @@ const FontTest = () => {
                     />
                   }
                   label="Трекинг"
-                />{" "}
+                />
                 <FormControlLabel
                   sx={{ mr: 1 }}
                   control={
@@ -452,7 +433,7 @@ const FontTest = () => {
                     />
                   }
                   label="Размер"
-                />{" "}
+                />
                 <FormControlLabel
                   sx={{ mr: 1 }}
                   control={
@@ -464,15 +445,13 @@ const FontTest = () => {
                     />
                   }
                   label="Интерлиньяж"
-                />{" "}
-              </FormGroup>{" "}
-            </Paper>{" "}
+                />
+              </FormGroup>
+            </Paper>
           </motion.div>
-        )}{" "}
+        )}
       </AnimatePresence>
       <Paper elevation={1} sx={{ p: 1.5, mb: 2 }}>
-        {" "}
-        {/* Уменьшили паддинг */}
         <Box
           sx={{
             display: "flex",
@@ -483,11 +462,9 @@ const FontTest = () => {
           }}
         >
           <Typography variant="subtitle1" component="div">
-            {" "}
-            Вопрос {Math.min(currentQuestion, MAX_QUESTIONS)}/{MAX_QUESTIONS}{" "}
+            Вопрос {Math.min(currentQuestion, MAX_QUESTIONS)}/{MAX_QUESTIONS}
           </Typography>
           <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-            {" "}
             <Chip
               icon={<HourglassBottom />}
               label={`${formatTime(questionTimeLeft)} / ${formatTime(
@@ -495,13 +472,13 @@ const FontTest = () => {
               )}`}
               variant="outlined"
               size="small"
-            />{" "}
+            />
             <Typography
               variant="caption"
               sx={{ display: { xs: "none", sm: "block" } }}
             >
               {currentUser?.username}
-            </Typography>{" "}
+            </Typography>
             <IconButton
               onClick={handleLogout}
               title="Выйти"
@@ -509,7 +486,7 @@ const FontTest = () => {
               size="small"
             >
               <Logout />
-            </IconButton>{" "}
+            </IconButton>
           </Box>
         </Box>
         <LinearProgress
@@ -519,10 +496,7 @@ const FontTest = () => {
         />
       </Paper>
       <Grid container spacing={2}>
-        {" "}
-        {/* Уменьшили spacing */}
         <Grid item xs={12} md={5} lg={4}>
-          {/* Левая панель с удалением */}
           <Paper
             elevation={3}
             sx={{
@@ -541,11 +515,9 @@ const FontTest = () => {
                 flexGrow: 1,
                 overflowY: "auto",
                 mb: 1.5,
-                maxHeight: { xs: "25vh", md: "none" },
+                maxHeight: { xs: "25vh" },
               }}
             >
-              {" "}
-              {/* Ограничение высоты и прокрутка */}
               {currentVariation && !isLoading && (
                 <>
                   <Typography
@@ -598,8 +570,7 @@ const FontTest = () => {
                               flexGrow: 1,
                             }}
                           >
-                            {" "}
-                            {text}{" "}
+                            {text}
                           </Typography>
                           <IconButton
                             size="small"
@@ -635,9 +606,7 @@ const FontTest = () => {
                   borderColor: "divider",
                 }}
               >
-                {" "}
                 <Box sx={{ display: "flex", gap: 1 }}>
-                  {" "}
                   <TextField
                     fullWidth
                     size="small"
@@ -648,31 +617,28 @@ const FontTest = () => {
                     onKeyPress={(e) =>
                       e.key === "Enter" && handleAddCustomText()
                     }
-                  />{" "}
+                  />
                   <IconButton
                     color="primary"
                     onClick={handleAddCustomText}
                     disabled={!newText.trim() || customTexts.length >= 5}
                     aria-label="Добавить текст"
                   >
-                    {" "}
-                    <AddCircleOutline />{" "}
-                  </IconButton>{" "}
-                </Box>{" "}
+                    <AddCircleOutline />
+                  </IconButton>
+                </Box>
                 <Typography
                   variant="caption"
                   display="block"
                   sx={{ textAlign: "right", mt: 0.5 }}
                 >
-                  {" "}
-                  {customTexts.length}/5{" "}
-                </Typography>{" "}
+                  {customTexts.length}/5
+                </Typography>
               </Box>
             )}
           </Paper>
         </Grid>
         <Grid item xs={12} md={7} lg={8}>
-          {/* Правая панель */}
           <AnimatePresence mode="wait">
             <motion.div
               key={
@@ -695,8 +661,6 @@ const FontTest = () => {
                   gap: 2,
                 }}
               >
-                {" "}
-                {/* Уменьшили паддинг и gap */}
                 {isLoading ? (
                   <Box
                     sx={{
@@ -720,8 +684,6 @@ const FontTest = () => {
                         gap: 1.5,
                       }}
                     >
-                      {" "}
-                      {/* Уменьшили gap */}
                       <Typography
                         variant="h4"
                         sx={{
@@ -734,8 +696,6 @@ const FontTest = () => {
                           textAlign: "center",
                         }}
                       >
-                        {" "}
-                        {/* Адаптивный размер */}
                         Этот текст написан вариацией шрифта
                       </Typography>
                       <Typography
@@ -757,8 +717,7 @@ const FontTest = () => {
                           mt: 1,
                         }}
                         placeholder="Оставьте поле пустым, чтобы пропустить вопрос"
-                      />{" "}
-                      {/* Уменьшили minRows */}
+                      />
                     </Box>
                     <LoadingButton
                       variant="contained"
@@ -769,14 +728,12 @@ const FontTest = () => {
                       disabled={isLoading || isSaving}
                       sx={{ py: 1.2, borderRadius: 5, fontSize: "1rem" }}
                     >
-                      {" "}
-                      {/* Уменьшили паддинг и размер шрифта */}
                       {currentQuestion < MAX_QUESTIONS
                         ? reaction.trim()
                           ? "Ответить и продолжить"
                           : "Пропустить"
                         : "Завершить"}
-                    </LoadingButton>{" "}
+                    </LoadingButton>
                   </>
                 ) : (
                   <Box
@@ -789,11 +746,10 @@ const FontTest = () => {
                       gap: 2,
                     }}
                   >
-                    {" "}
                     <Typography variant="h6" color="text.secondary">
                       Ожидание загрузки вариации...
-                    </Typography>{" "}
-                    <CircularProgress size={30} sx={{ mt: 1 }} />{" "}
+                    </Typography>
+                    <CircularProgress size={30} sx={{ mt: 1 }} />
                   </Box>
                 )}
               </Paper>

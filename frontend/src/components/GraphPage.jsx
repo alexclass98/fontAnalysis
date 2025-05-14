@@ -155,6 +155,12 @@ const GraphPage = () => {
   const networkInstanceRef = useRef(null);
   const containerRef = useRef(null);
 
+  const createHtmlElement = (htmlString) => {
+    const div = document.createElement("div");
+    div.innerHTML = htmlString;
+    return div;
+  };
+
   const processData = useCallback((data) => {
     const nodesMap = new Map();
     const nodeDegrees = new Map();
@@ -196,15 +202,19 @@ const GraphPage = () => {
         to: targetId,
         label: String(count),
         value: count,
-        title: `<b>Связь:</b> ${sourceId} - ${targetId}<br>Количество: ${count}`,
+        title: createHtmlElement(
+          `<b>Связь:</b> ${sourceId} - ${targetId}<br>Количество: ${count}`
+        ),
       });
     });
     const nodes = Array.from(nodesMap.values()).map((node) => ({
       ...node,
       value: 1 + Math.log1p(nodeDegrees.get(node.id) || 0) * 5,
-      title: `<b>${node.group === 1 ? "Шрифт" : "Реакция"}:</b> ${
-        node.id
-      }<br>Связей (взвеш.): ${nodeDegrees.get(node.id) || 0}`,
+      title: createHtmlElement(
+        `<b>${node.group === 1 ? "Шрифт" : "Реакция"}:</b> ${
+          node.id
+        }<br>Связей (взвеш.): ${nodeDegrees.get(node.id) || 0}`
+      ),
     }));
     return { nodes, edges: Array.from(linkMap.values()) };
   }, []);
@@ -491,7 +501,9 @@ const GraphPage = () => {
                         }
                       />
                     }
-                    label={<StyleIcon fontSize="small" />}
+                    label={
+                      <StyleIcon sx={{ marginTop: "3px" }} fontSize="small" />
+                    }
                     sx={{ "& .MuiTypography-root": { fontSize: "0.8rem" } }}
                   />
                 </Tooltip>
@@ -504,7 +516,12 @@ const GraphPage = () => {
                         onChange={(e) => setSearchByLemma(e.target.checked)}
                       />
                     }
-                    label={<LanguageIcon fontSize="small" />}
+                    label={
+                      <LanguageIcon
+                        sx={{ marginTop: "3px" }}
+                        fontSize="small"
+                      />
+                    }
                     sx={{ "& .MuiTypography-root": { fontSize: "0.8rem" } }}
                   />
                 </Tooltip>
@@ -517,8 +534,7 @@ const GraphPage = () => {
                 disabled={!searchTerm.trim()}
                 startIcon={<SearchIcon />}
               >
-                {" "}
-                Найти{" "}
+                Найти
               </LoadingButton>
             </Box>
             {searchError && (
@@ -531,7 +547,6 @@ const GraphPage = () => {
             )}
             <Box sx={{ flexGrow: 1, overflowY: "auto", minHeight: 150 }}>
               <List dense disablePadding>
-                {" "}
                 {searchResults.map((result, index) => (
                   <ListItemButton
                     key={result.details?.id || index}
@@ -542,7 +557,6 @@ const GraphPage = () => {
                     }}
                     onClick={() => handleResultClick(result)}
                   >
-                    {" "}
                     <ListItemText
                       primary={
                         result.aggregated_by_font_only
@@ -562,9 +576,9 @@ const GraphPage = () => {
                           : formatVariationDetails(result.details),
                       }}
                       secondaryTypographyProps={{ variant: "caption" }}
-                    />{" "}
+                    />
                   </ListItemButton>
-                ))}{" "}
+                ))}
                 {!searchLoading &&
                   searchResults.length === 0 &&
                   !searchError &&
@@ -575,7 +589,7 @@ const GraphPage = () => {
                     >
                       Результатов нет.
                     </Typography>
-                  )}{" "}
+                  )}
               </List>
             </Box>
             <Divider sx={{ my: 2 }} />
@@ -587,7 +601,6 @@ const GraphPage = () => {
               onSubmit={handleFilterSubmit}
               sx={{ display: "flex", gap: 1, mb: 1 }}
             >
-              {" "}
               <TextField
                 fullWidth
                 size="small"
@@ -597,28 +610,25 @@ const GraphPage = () => {
                 InputProps={{
                   endAdornment: filterKeyword && (
                     <InputAdornment position="end">
-                      {" "}
                       <IconButton
                         size="small"
                         onClick={handleResetFilter}
                         title="Сбросить фильтр"
                       >
-                        {" "}
-                        <FilterListOffIcon fontSize="small" />{" "}
-                      </IconButton>{" "}
+                        <FilterListOffIcon fontSize="small" />
+                      </IconButton>
                     </InputAdornment>
                   ),
                 }}
-              />{" "}
+              />
               <Button
                 type="submit"
                 variant="outlined"
                 size="small"
                 disabled={!filterKeyword.trim()}
               >
-                {" "}
-                Фильтр{" "}
-              </Button>{" "}
+                Фильтр
+              </Button>
             </Box>
             <Tooltip
               title={
@@ -673,8 +683,7 @@ const GraphPage = () => {
                     backgroundColor: "rgba(255, 255, 255, 0.7)",
                   }}
                 >
-                  {" "}
-                  <CircularProgress size={60} />{" "}
+                  <CircularProgress size={60} />
                 </Box>
               )}
               {errorState && !loading && (
@@ -684,8 +693,7 @@ const GraphPage = () => {
                   alignItems="center"
                   sx={{ height: "100%" }}
                 >
-                  {" "}
-                  <Typography color="error">{errorState}</Typography>{" "}
+                  <Typography color="error">{errorState}</Typography>
                 </Box>
               )}
               {!loading &&
@@ -699,13 +707,11 @@ const GraphPage = () => {
                     alignItems="center"
                     sx={{ height: "100%" }}
                   >
-                    {" "}
                     <Typography sx={{ textAlign: "center", mt: 4 }}>
-                      {" "}
                       {filteredGraphData
                         ? "Узлы по фильтру не найдены."
-                        : "Нет данных для отображения графа."}{" "}
-                    </Typography>{" "}
+                        : "Нет данных для отображения графа."}
+                    </Typography>
                   </Box>
                 )}
               <Box
