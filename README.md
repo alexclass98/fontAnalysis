@@ -91,31 +91,21 @@
 
 Посмотрите, как выглядит наша платформа в действии!
 
-*(Замените `URL_TO_SCREENSHOT_X` на реальные ссылки на ваши скриншоты. Рекомендуется загрузить их в репозиторий, например, в папку `docs/screenshots/` или аналогичную)*
+<div align="center">
 
-<table align="center" style="margin: 0 auto;">
-  <tr>
-    <td align="center" valign="top">
-      <p><strong>Страница тестирования</strong><br><em>(сбор ассоциаций)</em></p>
-      <img src="docs/screenshots/MainPage.png" alt="Главная страница" width="400" style="border:1px solid #ddd; border-radius: 4px; padding: 5px;"/>
-      
-    </td>
-    <td align="center" valign="top">
-      <p><strong>Общий вид графа ассоциаций</strong><br><em>(все связи)</em></p>
-      <img src="docs/screenshots/Graph.png" alt="Граф ассоциаций шрифтов" width="400" style="border:1px solid #ddd; border-radius: 4px; padding: 5px;"/>
-    </td>
-  </tr>
-  <tr>
-    <td align="center" valign="top">
-      <p><strong>Фильтрация на графе</strong><br><em>(поиск по ассоциации)</em></p>
-      <img src="docs/screenshots/Search.png" alt="Фильтрация на графе" width="400" style="border:1px solid #ddd; border-radius: 4px; padding: 5px;"/>
-    </td>
-    <td align="center" valign="top">
-      <p><strong>Страница тестирования</strong><br><em>(найденный шрифт на графе)</em></p>
-      <img src="docs/screenshots/TestPage.png" alt="Поиск шрифта по ассоциации" width="400" style="border:1px solid #ddd; border-radius: 4px; padding: 5px;"/>
-    </td>
-  </tr>
-</table>
+  <p><strong>Главная страница / Страница тестирования</strong><br><em>(начало сбора ассоциаций)</em></p>
+  <img src="docs/screenshots/MainPage.png" alt="Главная страница" width="700" style="border:1px solid #ddd; border-radius: 4px; padding: 5px; margin-bottom: 20px; max-width: 100%; height: auto;"/>
+
+  <p><strong>Общий вид графа ассоциаций</strong><br><em>(визуализация всех связей)</em></p>
+  <img src="docs/screenshots/Graph.png" alt="Граф ассоциаций шрифтов" width="700" style="border:1px solid #ddd; border-radius: 4px; padding: 5px; margin-bottom: 20px; max-width: 100%; height: auto;"/>
+
+  <p><strong>Фильтрация на графе и поиск шрифта по ассоциации</strong><br><em>(интерактивное исследование)</em></p>
+  <img src="docs/screenshots/Search.png" alt="Фильтрация на графе и поиск шрифта" width="700" style="border:1px solid #ddd; border-radius: 4px; padding: 5px; margin-bottom: 20px; max-width: 100%; height: auto;"/>
+
+  <p><strong>Страница прохождения теста</strong><br><em>(пример вопроса и ввод ассоциации)</em></p>
+  <img src="docs/screenshots/TestPage.png" alt="Страница прохождения теста" width="700" style="border:1px solid #ddd; border-radius: 4px; padding: 5px; margin-bottom: 20px; max-width: 100%; height: auto;"/>
+
+</div>
 
 ---
 
