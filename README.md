@@ -97,22 +97,22 @@
   <tr>
     <td align="center" valign="top">
       <p><strong>Страница тестирования</strong><br><em>(сбор ассоциаций)</em></p>
-      <img src="URL_TO_SCREENSHOT_TESTING_PAGE" alt="Страница тестирования шрифтов" width="400" style="border:1px solid #ddd; border-radius: 4px; padding: 5px;"/>
+      <img src="docs/screenshots/MainPage.png" alt="Главная страница" width="400" style="border:1px solid #ddd; border-radius: 4px; padding: 5px;"/>
       
     </td>
     <td align="center" valign="top">
       <p><strong>Общий вид графа ассоциаций</strong><br><em>(все связи)</em></p>
-      <img src="URL_TO_SCREENSHOT_GRAPH_OVERVIEW" alt="Граф ассоциаций шрифтов" width="400" style="border:1px solid #ddd; border-radius: 4px; padding: 5px;"/>
+      <img src="docs/screenshots/Graph.png" alt="Граф ассоциаций шрифтов" width="400" style="border:1px solid #ddd; border-radius: 4px; padding: 5px;"/>
     </td>
   </tr>
   <tr>
     <td align="center" valign="top">
       <p><strong>Фильтрация на графе</strong><br><em>(поиск по ассоциации)</em></p>
-      <img src="URL_TO_SCREENSHOT_GRAPH_FILTERED" alt="Фильтрация на графе" width="400" style="border:1px solid #ddd; border-radius: 4px; padding: 5px;"/>
+      <img src="docs/screenshots/Search.png" alt="Фильтрация на графе" width="400" style="border:1px solid #ddd; border-radius: 4px; padding: 5px;"/>
     </td>
     <td align="center" valign="top">
-      <p><strong>Результат поиска шрифта</strong><br><em>(найденный шрифт на графе)</em></p>
-      <img src="URL_TO_SCREENSHOT_SEARCH_RESULT" alt="Поиск шрифта по ассоциации" width="400" style="border:1px solid #ddd; border-radius: 4px; padding: 5px;"/>
+      <p><strong>Страница тестирования</strong><br><em>(найденный шрифт на графе)</em></p>
+      <img src="docs/screenshots/TestPage.png" alt="Поиск шрифта по ассоциации" width="400" style="border:1px solid #ddd; border-radius: 4px; padding: 5px;"/>
     </td>
   </tr>
 </table>
@@ -266,12 +266,12 @@
 
 ## 🧑‍🎓 Автор и научное руководство
 
-*   **Автор:** `[ВАШЕ ИМЯ И ФАМИЛИЯ]`
-    *   GitHub: [@YOUR_USERNAME](https://github.com/YOUR_USERNAME)
-    *   Email: `ваша_почта@example.com` (опционально)
-*   **Учебное заведение:** `[Название вашего ВУЗа]`
-*   **Факультет/Кафедра:** `[Название вашего факультета/кафедры]`
-*   **Научный руководитель:** `[ФИО, должность и ученая степень вашего научного руководителя]`
+*   **Автор:** `Балабанов Алексей Олегович`
+    *   GitHub: [@alexclass98](https://github.com/alexclass98/fontAnalysis)
+    *   Email: `alexclass98@mail.ru`
+*   **Учебное заведение:** `МГТУ им Н.Э. Баумана`
+*   **Факультет/Кафедра:** `ИУ5`
+*   **Научный руководитель:** `к.т.н. Филиппович Анна Юрьевна`
 
 ---
 
