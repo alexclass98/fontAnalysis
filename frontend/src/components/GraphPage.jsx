@@ -33,6 +33,29 @@ import StyleIcon from "@mui/icons-material/Style";
 import { Network } from "vis-network/standalone/umd/vis-network.min";
 import "vis-network/styles/vis-network.css";
 
+const FILTER_HIGHLIGHT_STYLE = {
+  color: {
+    border: "#D32F2F",
+    background: "#FFCDD2",
+    highlight: {
+      border: "#B71C1C",
+      background: "#FFEBEE",
+    },
+    hover: {
+      border: "#B71C1C",
+      background: "#FFEBEE",
+    },
+  },
+  borderWidth: 3.5,
+  shadow: {
+    enabled: true,
+    color: "rgba(0,0,0,0.45)",
+    size: 12,
+    x: 2,
+    y: 2,
+  },
+};
+
 const formatVariationDetails = (details) => {
   if (!details) return "Нет данных";
   const style =
@@ -273,6 +296,7 @@ const GraphPage = () => {
   const handleFilterChange = (event) => {
     setFilterKeyword(event.target.value);
   };
+
   const applyFilter = useCallback(
     (keyword) => {
       if (!keyword?.trim()) {
@@ -280,33 +304,59 @@ const GraphPage = () => {
         return;
       }
       const lowerKeyword = keyword.toLowerCase();
-      const matchedNodes = originalGraphData.nodes.filter(
+
+      const directlyMatchedOriginalNodes = originalGraphData.nodes.filter(
         (node) =>
           node.id.toLowerCase().includes(lowerKeyword) ||
-          node.label?.toLowerCase().includes(lowerKeyword)
+          (typeof node.label === "string" &&
+            node.label.toLowerCase().includes(lowerKeyword))
       );
-      if (matchedNodes.length > 0) {
-        const startNodeIds = matchedNodes.map((n) => n.id);
-        const relatedData = findNeighborhoodNodesAndEdges(
+
+      if (directlyMatchedOriginalNodes.length > 0) {
+        const startNodeIds = directlyMatchedOriginalNodes.map((n) => n.id);
+
+        const neighborhood = findNeighborhoodNodesAndEdges(
           startNodeIds,
           originalGraphData.nodes,
           originalGraphData.edges
         );
-        setFilteredGraphData(relatedData);
+
+        const finalNodes = neighborhood.nodes.map((node) => {
+          if (startNodeIds.includes(node.id)) {
+            return {
+              ...node,
+              color: {
+                ...(typeof node.color === "object" ? node.color : {}),
+                ...FILTER_HIGHLIGHT_STYLE.color,
+              },
+              borderWidth: FILTER_HIGHLIGHT_STYLE.borderWidth,
+              shadow: FILTER_HIGHLIGHT_STYLE.shadow,
+            };
+          }
+          return node;
+        });
+
+        setFilteredGraphData({
+          nodes: finalNodes,
+          edges: neighborhood.edges,
+        });
       } else {
         setFilteredGraphData({ nodes: [], edges: [] });
       }
     },
     [originalGraphData]
   );
+
   const handleFilterSubmit = (event) => {
     event.preventDefault();
     applyFilter(filterKeyword);
   };
+
   const handleResetFilter = () => {
     setFilterKeyword("");
     setFilteredGraphData(null);
   };
+
   const handleResultClick = (result) => {
     const cn = result.details?.cipher_name;
     if (cn) {
@@ -322,6 +372,7 @@ const GraphPage = () => {
     let network = null;
     let resizeObserver = null;
     const dataToRender = filteredGraphData || originalGraphData;
+
     if (
       dataToRender &&
       dataToRender.nodes &&
@@ -409,8 +460,13 @@ const GraphPage = () => {
         layout: { improvedLayout: true },
       };
       try {
+        if (networkInstanceRef.current) {
+          networkInstanceRef.current.destroy();
+          networkInstanceRef.current = null;
+        }
         network = new Network(visJsRef.current, dataToRender, options);
         networkInstanceRef.current = network;
+
         network.on("stabilizationIterationsDone", () =>
           console.log("Graph stabilization finished.")
         );
@@ -419,7 +475,9 @@ const GraphPage = () => {
           setErrorState("Ошибка при отрисовке графа");
           dispatch(setError("Ошибка при работе с графом vis-network"));
         });
+
         if (containerRef.current) {
+          if (resizeObserver) resizeObserver.disconnect();
           resizeObserver = new ResizeObserver(() => {
             if (networkInstanceRef.current) {
               networkInstanceRef.current.redraw();
@@ -435,10 +493,8 @@ const GraphPage = () => {
       }
     }
     return () => {
-      if (resizeObserver) resizeObserver.disconnect();
-      if (networkInstanceRef.current) {
-        networkInstanceRef.current.destroy();
-        networkInstanceRef.current = null;
+      if (resizeObserver) {
+        resizeObserver.disconnect();
       }
     };
   }, [filteredGraphData, originalGraphData, loading, errorState, dispatch]);
