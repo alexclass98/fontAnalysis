@@ -32,7 +32,7 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import AddCircleOutline from "@mui/icons-material/AddCircleOutline";
 import DeleteOutline from "@mui/icons-material/DeleteOutline";
 
-const MAX_QUESTIONS = 20;
+const MAX_QUESTIONS = 50;
 const defaultVariationConfig = {
   vary_weight: true,
   vary_style: true,

@@ -1,15 +1,15 @@
 from django.http import JsonResponse
 from django.views import View
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, authenticate
 from django.db.models import Count
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from rest_framework import status
-from .models import Study, Cipher, Association, Administrator
-from .gateway import UserGateway
-from .serializers import RegisterSerializer, LoginSerializer, CipherSerializer, AssociationSerializer
-from .utils import get_lemmas
+from .models import Study, Cipher, Association, Administrator, UserProfile # Добавлен UserProfile для возможного использования
+from .gateway import UserGateway, StudyGateway, ReactionGateway, CipherGateway, AssociationGateway # Предполагается, что gateway.py существует
+from .serializers import RegisterSerializer, LoginSerializer, CipherSerializer, AssociationSerializer, CustomTokenObtainPairSerializer # Добавлен CustomTokenObtainPairSerializer
+from .utils import get_lemmas # Предполагается, что utils.py существует
 import random
 import itertools
 
@@ -31,22 +31,68 @@ class UserView(APIView):
         if action == 'register':
             serializer = RegisterSerializer(data=request.data)
             if serializer.is_valid():
-                ug = UserGateway.create(
-                    username=serializer.validated_data['username'], password=serializer.validated_data['password'],
-                    email=serializer.validated_data['email'], first_name=serializer.validated_data.get('first_name'),
-                    last_name=serializer.validated_data.get('last_name'))
-                return Response({"message": "Регистрация успешна!", "user": ug.to_dict()}, status=status.HTTP_201_CREATED)
+                user = serializer.save() 
+                
+                refresh = CustomTokenObtainPairSerializer.get_token(user)
+                access_token = str(refresh.access_token)
+                
+                user_data = {
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                }
+                if hasattr(user, 'profile') and user.profile:
+                    user_data['profile'] = {
+                        'gender': user.profile.gender,
+                        'age': user.profile.age,
+                        'education_level': user.profile.education_level,
+                        'specialty': user.profile.specialty,
+                    }
+
+                return Response({
+                    "message": "Регистрация успешна!",
+                    "user": user_data,
+                    "access": access_token,
+                    "refresh": str(refresh) 
+                }, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
         elif action == 'login':
-            serializer = LoginSerializer(data=request.data)
-            if serializer.is_valid():
-                username = serializer.validated_data['username']; password = serializer.validated_data['password']
-                ug = UserGateway.authenticate(username=username, password=password)
-                if ug:
-                    rt, at = ug.get_tokens(); ud = ug.to_dict(); is_admin = Administrator.objects.filter(user=ug.user).exists()
-                    return Response({"refresh": rt, "access": at, "user": ud, "is_admin": is_admin}, status=status.HTTP_200_OK)
+            login_serializer = LoginSerializer(data=request.data)
+            if login_serializer.is_valid():
+                username = login_serializer.validated_data['username']
+                password = login_serializer.validated_data['password']
+                
+                user = authenticate(username=username, password=password)
+                if user:
+                    refresh = CustomTokenObtainPairSerializer.get_token(user)
+                    is_admin = Administrator.objects.filter(user=user).exists()
+                    
+                    user_data = {
+                        "id": user.id,
+                        "username": user.username,
+                        "email": user.email,
+                        "first_name": user.first_name,
+                        "last_name": user.last_name,
+                    }
+                    if hasattr(user, 'profile') and user.profile:
+                         user_data['profile'] = {
+                            'gender': user.profile.gender,
+                            'age': user.profile.age,
+                            'education_level': user.profile.education_level,
+                            'specialty': user.profile.specialty,
+                        }
+
+                    return Response({
+                        "refresh": str(refresh),
+                        "access": str(refresh.access_token),
+                        "user": user_data,
+                        "is_admin": is_admin
+                    }, status=status.HTTP_200_OK)
                 return Response({"error": "Неверные учетные данные"}, status=status.HTTP_401_UNAUTHORIZED)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(login_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         else: return Response({"error": "Недопустимое действие"}, status=status.HTTP_400_BAD_REQUEST)
 
     def get(self, request, user_id=None):
@@ -54,18 +100,31 @@ class UserView(APIView):
         else:
             if not request.user.is_staff and not hasattr(request.user, 'administrator'): return Response({"error": "Недостаточно прав для просмотра пользователей"}, status=status.HTTP_403_FORBIDDEN)
             try:
-                user_gateways = UserGateway.get_all_users(); users_data = [ug.to_dict() for ug in user_gateways]
+                users = User.objects.all()
+                users_data = []
+                for u in users:
+                    data = {
+                        "id": u.id, "username": u.username, "email": u.email,
+                        "first_name": u.first_name, "last_name": u.last_name
+                    }
+                    if hasattr(u, 'profile') and u.profile:
+                        data['profile'] = {
+                            'gender': u.profile.gender, 'age': u.profile.age,
+                            'education_level': u.profile.education_level, 'specialty': u.profile.specialty
+                        }
+                    users_data.append(data)
                 return Response(users_data, status=status.HTTP_200_OK)
             except Exception as e: return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, user_id=None):
         if user_id is None: return Response({"error": "Не указан ID пользователя для удаления"}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            ug = UserGateway.get_by_id(user_id)
-            if not ug: return Response({"error": "Пользователь не найден"}, status=status.HTTP_404_NOT_FOUND)
-            if ug.user == request.user: return Response({"error": "Нельзя удалить самого себя"}, status=status.HTTP_400_BAD_REQUEST)
-            if ug.delete(): return Response({"message": "Пользователь удален"}, status=status.HTTP_200_OK)
-            return Response({"error": "Не удалось удалить пользователя"}, status=status.HTTP_400_BAD_REQUEST)
+            user_to_delete = User.objects.get(id=user_id)
+            if user_to_delete == request.user: return Response({"error": "Нельзя удалить самого себя"}, status=status.HTTP_400_BAD_REQUEST)
+            user_to_delete.delete()
+            return Response({"message": "Пользователь удален"}, status=status.HTTP_200_OK)
+        except User.DoesNotExist:
+             return Response({"error": "Пользователь не найден"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e: return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class RandomCipherView(APIView):
@@ -76,13 +135,11 @@ class RandomCipherView(APIView):
     ]
 
     def _create_popular_ciphers(self):
-        print("No ciphers found in DB. Attempting to create popular fonts...")
         created_count = 0
         for font_name in self.POPULAR_CIPHERS:
             _, created = Cipher.objects.get_or_create(result=font_name)
             if created:
                 created_count += 1
-        print(f"Created {created_count} new ciphers.")
         return list(Cipher.objects.all())
 
     def post(self, request):
@@ -101,12 +158,10 @@ class RandomCipherView(APIView):
         if not all_ciphers:
             all_ciphers = self._create_popular_ciphers()
             if not all_ciphers:
-                print("Error: Cipher list is still empty after attempting creation.")
                 return Response(
                     {"error": "Не удалось создать или найти шрифты в базе данных."},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
-            print(f"Now using {len(all_ciphers)} ciphers from DB after creation.")
 
         random.shuffle(all_ciphers)
 
@@ -174,7 +229,9 @@ class StudyView(APIView):
             elif not created: return {"error": "Повторная реакция на ту же вариацию", "skipped": True, "data": study_data}
             return {"association_id": association.id}
         except Cipher.DoesNotExist: return {"error": f"Базовый шрифт с ID {cipher_id} не найден", "data": study_data}
-        except Exception as e: print(f"Error saving study data {study_data} for user {user.id}: {e}"); return {"error": "Внутренняя ошибка сервера при сохранении", "details": str(e), "data": study_data}
+        except Exception as e:
+            print(f"Error saving study data {study_data} for user {user.id}: {e}")
+            return {"error": "Внутренняя ошибка сервера при сохранении", "details": str(e), "data": study_data}
 
 class GraphView(View):
      def get(self, request):

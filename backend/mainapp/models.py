@@ -1,6 +1,7 @@
 from django.db import models
-from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 User = get_user_model()
 
@@ -58,7 +59,7 @@ class Association(models.Model):
 
     id = models.AutoField(primary_key=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='associations')
-    cipher = models.ForeignKey(Cipher, on_delete=models.CASCADE, related_name='associations')
+    cipher = models.ForeignKey(Cipher, on_delete=models.CASCADE, related_name='cipher_associations')
     reaction_description = models.TextField(blank=True, null=True, db_index=True)
     reaction_lemmas = models.TextField(blank=True, null=True, db_index=True)
     font_weight = models.IntegerField(choices=FontWeight.choices, default=FontWeight.REGULAR)
@@ -84,8 +85,55 @@ class Association(models.Model):
         spacing_display = f"Spacing {self.letter_spacing}"
         size_display = f"Size {self.font_size}pt"
         leading_display = f"Leading {self.line_height}"
-        parts = [self.cipher.result, weight_display, style_display, spacing_display, size_display, leading_display]
+        cipher_result = self.cipher.result if self.cipher else "N/A"
+        parts = [cipher_result, weight_display, style_display, spacing_display, size_display, leading_display]
         return " ".join(filter(None, parts))
 
     def __str__(self):
-        return f"Assoc. by {self.user.username} for {self.variation_details}"
+        username = self.user.username if self.user else "Unknown user"
+        return f"Assoc. by {username} for {self.variation_details}"
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+
+    class Gender(models.TextChoices):
+        MALE = 'MALE', 'Мужской'
+        FEMALE = 'FEMALE', 'Женский'
+        OTHER = 'OTHER', 'Другой'
+        PREFER_NOT_TO_SAY = 'PNS', 'Предпочитаю не указывать'
+
+    class EducationLevel(models.TextChoices):
+        SECONDARY = 'SECONDARY', 'Среднее'
+        VOCATIONAL = 'VOCATIONAL', 'Среднее специальное'
+        INCOMPLETE_HIGHER = 'INCOMPLETE_HIGHER', 'Незаконченное высшее'
+        BACHELOR = 'BACHELOR', 'Бакалавр'
+        MASTER = 'MASTER', 'Магистр'
+        SPECIALIST = 'SPECIALIST', 'Специалитет'
+        PHD = 'PHD', 'Кандидат/Доктор наук (PhD)'
+        OTHER = 'OTHER_EDU', 'Другое'
+        PREFER_NOT_TO_SAY = 'PNS_EDU', 'Предпочитаю не указывать'
+
+    gender = models.CharField(
+        max_length=10,
+        choices=Gender.choices,
+        null=True,
+        blank=True
+    )
+    age = models.PositiveIntegerField(null=True, blank=True)
+    education_level = models.CharField(
+        max_length=20,
+        choices=EducationLevel.choices,
+        null=True,
+        blank=True
+    )
+    specialty = models.CharField(max_length=255, null=True, blank=True, help_text="Например, 'Психолог', 'Инженер', 'Студент-филолог'")
+
+    def __str__(self):
+        return f"Profile for {self.user.username}"
+
+@receiver(post_save, sender=User)
+def create_or_update_user_profile(sender, instance, created, **kwargs):
+    if created:
+        UserProfile.objects.create(user=instance)
+    else:
+        UserProfile.objects.get_or_create(user=instance)
