@@ -1,7 +1,5 @@
-from .models import Study, Cipher, Association, Reaction
+from .models import Study, Cipher, Association, Reaction 
 from django.contrib.auth import get_user_model, authenticate
-from rest_framework_simplejwt.tokens import RefreshToken
-from .serializers import CustomTokenObtainPairSerializer # Импортируем кастомный сериализатор
 
 User = get_user_model()
 
@@ -60,7 +58,7 @@ class ReactionGateway:
             if reaction:
                  return cls(reaction_id=reaction.id, name=reaction.name, description=reaction.description)
             return None
-        except Reaction.DoesNotExist:
+        except Reaction.DoesNotExist: # Эта ветка, вероятно, никогда не будет достигнута из-за .first()
             return None
 
     @classmethod
@@ -210,6 +208,8 @@ class UserGateway:
 
     def get_tokens(self):
         if self.user:
+            # ИМПОРТ ПЕРЕМЕЩЕН ВНУТРЬ МЕТОДА
+            from .serializers import CustomTokenObtainPairSerializer 
             refresh = CustomTokenObtainPairSerializer.get_token(self.user)
             access_token = str(refresh.access_token)
             refresh_token = str(refresh)
