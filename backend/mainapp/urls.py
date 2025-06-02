@@ -1,5 +1,8 @@
 from django.urls import path
-from .views import UserView, RandomCipherView, StudyView, GraphView, AssociationSearchView
+from .views import (
+    UserView, RandomCipherView, StudyView, GraphView, AssociationSearchView, 
+    NLPAnalysisView, AllAssociationsNLPAnalysisView
+)
 from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
@@ -12,4 +15,6 @@ urlpatterns = [
     path('graph/', GraphView.as_view(), name='graph-data'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('associations/search/', AssociationSearchView.as_view(), name='association-search'),
+    path('nlp/analyze-text/', NLPAnalysisView.as_view(), name='nlp-analyze-text'),
+    path('nlp/analyze-all-associations/', AllAssociationsNLPAnalysisView.as_view(), name='nlp-analyze-all-associations'),
 ]

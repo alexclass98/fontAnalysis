@@ -6,11 +6,12 @@ import { setToken, clearToken, setAccessToken } from "../store/authSlice";
 const API = axios.create({
   baseURL: (process.env.REACT_APP_API_URL || "http://localhost:8000") + "/api",
   headers: { "Content-Type": "application/json", Accept: "application/json" },
-  timeout: 60000,
+  timeout: 120000,
 });
 
 let isRefreshing = false;
 let failedQueue = [];
+
 const processQueue = (error, token = null) => {
   failedQueue.forEach((prom) => {
     if (error) {
@@ -21,6 +22,7 @@ const processQueue = (error, token = null) => {
   });
   failedQueue = [];
 };
+
 const refreshTokenApi = async (refresh) => {
   try {
     const response = await axios.post(
@@ -57,6 +59,7 @@ API.interceptors.response.use(
     const originalRequest = error.config;
     const status = error.response ? error.response.status : null;
     const refreshToken = store.getState().auth.refreshToken;
+
     if (status === 401 && refreshToken && !originalRequest._retry) {
       if (isRefreshing) {
         return new Promise(function (resolve, reject) {
@@ -83,11 +86,13 @@ API.interceptors.response.use(
         return API(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
+        store.dispatch(clearToken());
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
       }
     }
+
     const errorMessage =
       error.response?.data?.detail ||
       error.response?.data?.error ||
@@ -97,7 +102,14 @@ API.interceptors.response.use(
         : null) ||
       error.message ||
       "Произошла неизвестная ошибка";
-    if (!(status === 401 && originalRequest.url === "/users/login/")) {
+
+    if (
+      !(
+        status === 401 &&
+        (originalRequest.url.includes("/users/login/") ||
+          originalRequest.url.includes("/token/refresh/"))
+      )
+    ) {
       store.dispatch(setError(errorMessage));
     }
     return Promise.reject(error);
@@ -108,6 +120,7 @@ export const register = async (userData) => {
   const response = await API.post("/users/register/", userData);
   return response.data;
 };
+
 export const login = async (credentials) => {
   const response = await API.post("/users/login/", credentials);
   store.dispatch(
@@ -120,37 +133,55 @@ export const login = async (credentials) => {
   );
   return response.data;
 };
+
 export const getUsers = async () => {
   const response = await API.get("/users/");
   return response.data;
 };
-export const getGraphData = async (aggregateByLemma = false) => {
+
+export const getGraphData = async (nlpParams) => {
+  console.log("API.JS: getGraphData, отправка параметров:", nlpParams);
   const response = await API.get("/graph/", {
-    params: { aggregate_by_lemma: aggregateByLemma },
+    params: nlpParams,
   });
   return response.data;
 };
+
 export const deleteUser = async (userId) => {
   const response = await API.delete(`/users/${userId}/`);
   return response.data;
 };
+
 export const getRandomCipher = async (variationConfig) => {
   const response = await API.post("/ciphers/random/", variationConfig);
   return response.data;
 };
+
 export const saveStudy = async (studyDataArray) => {
   const response = await API.post("/studies/", studyDataArray);
   return response.data;
 };
-export const findAssociationsByReaction = async (
-  reactionDescription,
-  matchExactVariation = true,
-  searchByLemma = true
-) => {
-  const response = await API.post("/associations/search/", {
-    reaction_description: reactionDescription,
-    match_exact_variation: matchExactVariation,
-    search_by_lemma: searchByLemma,
+
+export const findAssociationsByReaction = async (searchPayload) => {
+  console.log(
+    "API.JS: findAssociationsByReaction, отправка тела POST:",
+    JSON.stringify(searchPayload, null, 2)
+  );
+  const response = await API.post("/associations/search/", searchPayload);
+  return response.data;
+};
+
+export const analyzeNLPText = async (textPayload) => {
+  const response = await API.post("/nlp/analyze-text/", textPayload);
+  return response.data;
+};
+
+export const analyzeAllAssociationsNLP = async (page = 1, pageSize = 5) => {
+  const response = await API.get("/nlp/analyze-all-associations/", {
+    params: {
+      page: page,
+      page_size: pageSize,
+    },
   });
   return response.data;
 };

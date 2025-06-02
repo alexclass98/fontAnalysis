@@ -1,5 +1,5 @@
 import React from "react";
-import { Routes, Route, Navigate, BrowserRouter } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom"; // BrowserRouter usually wraps App in index.js
 import { ThemeProvider, createTheme, CssBaseline, Box } from "@mui/material";
 import { useSelector } from "react-redux";
 import Login from "./components/Login";
@@ -10,6 +10,7 @@ import Header from "./components/Header";
 import ErrorSnackbar from "./utils/ErrorSnackbar";
 import FontTest from "./components/FontTest";
 import GraphPage from "./components/GraphPage";
+import NLPAnalysisPage from "./components/NLPAnalysisPage";
 import { selectToken, selectIsAdmin } from "./store/authSlice";
 
 const theme = createTheme({
@@ -109,15 +110,14 @@ const App = () => {
       <CssBaseline />
       <Header />
       <ErrorSnackbar />
-      <Box component="main" sx={{ flexGrow: 1 }}>
+      <Box component="main" sx={{ flexGrow: 1, p: 1 }}>
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route
             path="/login"
             element={
               <PublicRoute>
-                {" "}
-                <Login />{" "}
+                <Login />
               </PublicRoute>
             }
           />
@@ -125,8 +125,7 @@ const App = () => {
             path="/register"
             element={
               <PublicRoute>
-                {" "}
-                <Register />{" "}
+                <Register />
               </PublicRoute>
             }
           />
@@ -134,8 +133,7 @@ const App = () => {
             path="/test"
             element={
               <ProtectedRoute>
-                {" "}
-                <FontTest />{" "}
+                <FontTest />
               </ProtectedRoute>
             }
           />
@@ -143,8 +141,15 @@ const App = () => {
             path="/graph"
             element={
               <ProtectedRoute>
-                {" "}
-                <GraphPage />{" "}
+                <GraphPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/nlp-analysis"
+            element={
+              <ProtectedRoute>
+                <NLPAnalysisPage />
               </ProtectedRoute>
             }
           />
@@ -152,8 +157,7 @@ const App = () => {
             path="/admin"
             element={
               <AdminRoute>
-                {" "}
-                <AdminDashboard />{" "}
+                <AdminDashboard />
               </AdminRoute>
             }
           />

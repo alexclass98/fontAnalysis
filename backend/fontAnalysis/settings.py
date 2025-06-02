@@ -1,4 +1,4 @@
-import os
+import os # Добавлено для os.getenv
 from pathlib import Path
 import dj_database_url
 from datetime import timedelta
@@ -33,7 +33,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt',
-    'mainapp',
+    'mainapp', # Ваше приложение
 ]
 
 MIDDLEWARE = [
@@ -72,10 +72,10 @@ DATABASES = {
     'default': dj_database_url.config(
         default=os.environ.get(
             'DATABASE_URL_LOCAL_FALLBACK',
-            'postgres://postgres:postgres@localhost:5432/mydatabase2'
+            'postgres://postgres:postgres@localhost:5432/render_local_db_restored'
         ),
         conn_max_age=600,
-        ssl_require=os.environ.get('DJANGO_DB_SSL_REQUIRE', '1') == '1'
+        ssl_require=os.environ.get('DJANGO_DB_SSL_REQUIRE', '0') == '1' # Исправлено на '0' для DEBUG по умолчанию, если нужно
     )
 }
 
@@ -109,21 +109,12 @@ if DEBUG and not CORS_ALLOWED_ORIGINS:
 CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOW_METHODS = [
-    "DELETE",
-    "GET",
-    "OPTIONS",
-    "PATCH",
-    "POST",
-    "PUT",
+    "DELETE", "GET", "OPTIONS", "PATCH", "POST", "PUT",
 ]
 
 CORS_ALLOW_HEADERS = [
-    "accept",
-    "authorization",
-    "content-type",
-    "user-agent",
-    "x-csrftoken",
-    "x-requested-with",
+    "accept", "authorization", "content-type", "user-agent",
+    "x-csrftoken", "x-requested-with",
 ]
 
 csrf_trusted_origins_env = os.environ.get('CSRF_TRUSTED_ORIGINS', '')
@@ -135,6 +126,7 @@ if DEBUG and not CSRF_TRUSTED_ORIGINS:
         "http://127.0.0.1:3000",
     ]
 
+# Добавляем CORS_ALLOWED_ORIGINS в CSRF_TRUSTED_ORIGINS, если их там еще нет
 for origin in CORS_ALLOWED_ORIGINS:
     if origin not in CSRF_TRUSTED_ORIGINS:
         CSRF_TRUSTED_ORIGINS.append(origin)
@@ -170,8 +162,8 @@ SIMPLE_JWT = {
     "TOKEN_USER_CLASS": "rest_framework_simplejwt.models.TokenUser",
     "JTI_CLAIM": "jti",
     "SLIDING_TOKEN_REFRESH_EXP_CLAIM": "refresh_exp",
-    "SLIDING_TOKEN_LIFETIME": timedelta(minutes=5),
-    "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=1),
+    "SLIDING_TOKEN_LIFETIME": timedelta(minutes=5), # Стандартное значение, можно изменить
+    "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=1), # Стандартное значение, можно изменить
 }
 
 if not DEBUG:
@@ -181,36 +173,59 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SESSION_COOKIE_HTTPONLY = True
     CSRF_COOKIE_HTTPONLY = True
-    # SECURE_HSTS_SECONDS = 31536000
+    # SECURE_HSTS_SECONDS = 31536000 
     # SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     # SECURE_HSTS_PRELOAD = True
 
+# --- ИСПРАВЛЕННАЯ И ДОПОЛНЕННАЯ КОНФИГУРАЦИЯ LOGGING ---
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {asctime} [%(name)s] {message}', # Добавлено [%(name)s] для имени логгера
+            'style': '{',
+        },
+    },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
+            'formatter': 'simple', 
         },
-    },
-    'root': {
-        'handlers': ['console'],
-        'level': 'WARNING',
+        # Пример файлового хендлера, если понадобится
+        # 'file_debug': {
+        #     'level': 'DEBUG',
+        #     'class': 'logging.FileHandler',
+        #     'filename': BASE_DIR / 'debug.log',
+        #     'formatter': 'verbose',
+        # },
     },
     'loggers': {
         'django': {
             'handlers': ['console'],
-            'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
+            'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'), 
             'propagate': False,
         },
+        'django.request': { # Логирование запросов Django (полезно для отладки ошибок 4xx, 5xx)
+            'handlers': ['console'],
+            'level': 'WARNING', # или 'DEBUG' для очень подробных логов запросов
+            'propagate': False,
+        },
+        'mainapp': { # Логгер для вашего приложения mainapp
+            'handlers': ['console'], # Можно добавить 'file_debug', если настроен
+            'level': 'DEBUG',       
+            'propagate': False, # Ставим False, чтобы сообщения не дублировались корневым логгером, если у него тоже 'console'
+        },
+        # Добавьте другие специфичные логгеры по необходимости
     },
+    'root': { # Корневой логгер
+        'handlers': ['console'], # По умолчанию все неперехваченные логи пойдут сюда
+        'level': 'INFO',    # Установите WARNING или INFO для продакшена
+    }
 }
 
-# Optional: Print key settings on startup for verification in Render logs
-# print(f"DEBUG: {DEBUG}")
-# print(f"ALLOWED_HOSTS: {ALLOWED_HOSTS}")
-# print(f"CORS_ALLOWED_ORIGINS: {CORS_ALLOWED_ORIGINS}")
-# print(f"CSRF_TRUSTED_ORIGINS: {CSRF_TRUSTED_ORIGINS}")
-# print(f"STATIC_ROOT: {STATIC_ROOT}")
-# db_options = DATABASES['default'].get('OPTIONS', {})
-# print(f"Database SSL Require: {db_options.get('sslmode', 'require' if DATABASES['default'].get('SSLRequire', False) else 'prefer')}")
+# Убедитесь, что строка `logging.basicConfig(...)` удалена из `mainapp/nlp_processor.py`

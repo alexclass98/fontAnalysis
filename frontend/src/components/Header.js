@@ -12,9 +12,10 @@ import {
 } from "@mui/material";
 import LogoutIcon from "@mui/icons-material/Logout";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
-import ScienceIcon from "@mui/icons-material/Science"; // Иконка для теста
-import AutoGraphIcon from "@mui/icons-material/AutoGraph"; // Иконка для графа
-import HomeIcon from "@mui/icons-material/Home"; // Иконка для дома
+import ScienceIcon from "@mui/icons-material/Science";
+import AutoGraphIcon from "@mui/icons-material/AutoGraph";
+import HomeIcon from "@mui/icons-material/Home";
+import AnalyticsIcon from '@mui/icons-material/Analytics'; // Новая иконка
 import {
   clearToken,
   selectCurrentUser,
@@ -35,7 +36,6 @@ const Header = () => {
   return (
     <AppBar position="static" elevation={1}>
       <Toolbar>
-        {/* Заголовок */}
         <Typography
           variant="h6"
           component="div"
@@ -44,7 +44,6 @@ const Header = () => {
           Шрифтовые Ассоциации
         </Typography>
 
-        {/* Навигационные кнопки */}
         <Box sx={{ display: "flex", gap: 1 }}>
           <Button
             color="inherit"
@@ -72,6 +71,14 @@ const Header = () => {
               >
                 Граф
               </Button>
+              <Button
+                color="inherit"
+                component={RouterLink}
+                to="/nlp-analysis"
+                startIcon={<AnalyticsIcon />}
+              >
+                NLP Анализ
+              </Button>
             </>
           )}
           {currentUser && isAdmin && (
@@ -86,7 +93,6 @@ const Header = () => {
           )}
         </Box>
 
-        {/* Информация о пользователе и выход */}
         <Box
           sx={{
             marginLeft: "auto",

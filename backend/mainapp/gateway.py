@@ -1,6 +1,9 @@
-from .models import Study, Cipher, Association, Reaction 
+from .models import Study, Cipher, Association, Reaction, Administrator
 from django.contrib.auth import get_user_model, authenticate
+from django.core.exceptions import ObjectDoesNotExist
+import logging
 
+logger = logging.getLogger(__name__)
 User = get_user_model()
 
 class StudyGateway:
@@ -58,7 +61,7 @@ class ReactionGateway:
             if reaction:
                  return cls(reaction_id=reaction.id, name=reaction.name, description=reaction.description)
             return None
-        except Reaction.DoesNotExist: # Эта ветка, вероятно, никогда не будет достигнута из-за .first()
+        except Reaction.DoesNotExist:
             return None
 
     @classmethod
@@ -125,7 +128,7 @@ class CipherGateway:
         except Cipher.DoesNotExist:
             return False
 
-class AssociationGateway:
+class AssociationGateway_Original: # Переименован, чтобы не конфликтовать
     def __init__(self, association_id=None, user=None, cipher=None, reaction_description=None):
         self.association_id = association_id
         self.user = user
@@ -146,14 +149,14 @@ class AssociationGateway:
             cipher=self.cipher,
             reaction_description=self.reaction_description
         )
-        return AssociationGateway(association_id=association.id, user=association.user, cipher=association.cipher, reaction_description=association.reaction_description)
+        return AssociationGateway_Original(association_id=association.id, user=association.user, cipher=association.cipher, reaction_description=association.reaction_description)
 
     def update(self):
         try:
             association = Association.objects.get(id=self.association_id)
             association.reaction_description = self.reaction_description
             association.save()
-            return AssociationGateway(association_id=association.id, user=association.user, cipher=association.cipher, reaction_description=association.reaction_description)
+            return AssociationGateway_Original(association_id=association.id, user=association.user, cipher=association.cipher, reaction_description=association.reaction_description)
         except Association.DoesNotExist:
             return None
 
@@ -208,7 +211,6 @@ class UserGateway:
 
     def get_tokens(self):
         if self.user:
-            # ИМПОРТ ПЕРЕМЕЩЕН ВНУТРЬ МЕТОДА
             from .serializers import CustomTokenObtainPairSerializer 
             refresh = CustomTokenObtainPairSerializer.get_token(self.user)
             access_token = str(refresh.access_token)
@@ -226,3 +228,127 @@ class UserGateway:
                 "email": self.user.email,
             }
         return None
+
+class AssociationGateway_RowData:
+    def __init__(self, association_id=None, user_id=None, cipher_id=None,
+                 reaction_description=None, reaction_lemmas=None,
+                 font_weight=None, font_style=None, letter_spacing=None,
+                 font_size=None, line_height=None, created_at=None):
+
+        self.association_id = association_id
+        self.user_id = user_id
+        self.cipher_id = cipher_id
+        self._cipher_result_cache = None
+        
+        self.reaction_description = reaction_description
+        self.reaction_lemmas = reaction_lemmas
+        self.font_weight = font_weight
+        self.font_style = font_style
+        self.letter_spacing = letter_spacing
+        self.font_size = font_size
+        self.line_height = line_height
+        self.created_at = created_at
+
+    def _load_from_model(self, model_instance):
+        self.association_id = model_instance.id
+        self.user_id = model_instance.user_id
+        self.cipher_id = model_instance.cipher_id
+        if model_instance.cipher:
+            self._cipher_result_cache = model_instance.cipher.result
+        self.reaction_description = model_instance.reaction_description
+        self.reaction_lemmas = model_instance.reaction_lemmas
+        self.font_weight = model_instance.font_weight
+        self.font_style = model_instance.font_style
+        self.letter_spacing = model_instance.letter_spacing
+        self.font_size = model_instance.font_size
+        self.line_height = model_instance.line_height
+        self.created_at = model_instance.created_at
+
+    def get_cipher_result(self):
+        if self._cipher_result_cache is None and self.cipher_id:
+            try:
+                cipher_model = Cipher.objects.get(id=self.cipher_id)
+                self._cipher_result_cache = cipher_model.result
+            except Cipher.DoesNotExist:
+                logger.warning(f"Cipher with id {self.cipher_id} not found for AssociationGateway_RowData id {self.association_id}")
+                return None
+        return self._cipher_result_cache
+    
+    def get_reaction_description(self):
+        return self.reaction_description
+
+    def insert(self):
+        if self.association_id is not None:
+            raise ValueError("Cannot insert an object that already has an ID.")
+        
+        user_instance = User.objects.get(id=self.user_id) if self.user_id else None
+        cipher_instance = Cipher.objects.get(id=self.cipher_id) if self.cipher_id else None
+
+        if not user_instance or not cipher_instance:
+            raise ValueError("User or Cipher ID is missing or invalid for creating association.")
+
+        model_instance = Association.objects.create(
+            user=user_instance,
+            cipher=cipher_instance,
+            reaction_description=self.reaction_description,
+            reaction_lemmas=self.reaction_lemmas,
+            font_weight=self.font_weight,
+            font_style=self.font_style,
+            letter_spacing=self.letter_spacing,
+            font_size=self.font_size,
+            line_height=self.line_height
+        )
+        self._load_from_model(model_instance)
+        return True
+
+    def update(self):
+        if self.association_id is None:
+            raise ValueError("Cannot update an object without an ID.")
+        try:
+            model_instance = Association.objects.get(id=self.association_id)
+            model_instance.reaction_description = self.reaction_description
+            model_instance.reaction_lemmas = self.reaction_lemmas
+            model_instance.save()
+            self._load_from_model(model_instance)
+            return True
+        except Association.DoesNotExist:
+            logger.error(f"AssociationGateway_RowData: Association with ID {self.association_id} not found for update.")
+            return False
+
+    def delete(self):
+        if self.association_id is None:
+            raise ValueError("Cannot delete an object without an ID.")
+        try:
+            rows_affected, _ = Association.objects.filter(id=self.association_id).delete()
+            if rows_affected > 0:
+                self.association_id = None
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"AssociationGateway_RowData: Error deleting association with ID {self.association_id}: {e}")
+            return False
+
+class AssociationFinder_ForRowData:
+    @staticmethod
+    def find_all_valid_for_graph():
+        associations_qs = Association.objects.select_related('cipher').filter(
+            reaction_description__isnull=False
+        ).exclude(reaction_description__exact='')
+        
+        gateway_objects = []
+        for assoc_model in associations_qs:
+            if assoc_model.cipher and assoc_model.cipher.result and assoc_model.reaction_description:
+                gateway_obj = AssociationGateway_RowData()
+                gateway_obj._load_from_model(assoc_model)
+                gateway_objects.append(gateway_obj)
+        return gateway_objects
+
+    @staticmethod
+    def find_by_id(association_id):
+        try:
+            assoc_model = Association.objects.select_related('cipher').get(id=association_id)
+            gateway_obj = AssociationGateway_RowData()
+            gateway_obj._load_from_model(assoc_model)
+            return gateway_obj
+        except Association.DoesNotExist:
+            return None
