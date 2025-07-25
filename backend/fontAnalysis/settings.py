@@ -5,13 +5,15 @@ from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get(
-    'SECRET_KEY',
-    'django-insecure-$r!a@w@h!w*$%d31)40fqb*vo7kj^tb7$x1nz&*)4!*-jgiegh'
-)
+# 1. SECRET_KEY
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    raise Exception("SECRET_KEY environment variable is not set!")
 
+# 2. DEBUG
 DEBUG = os.environ.get('DEBUG', '0') == '1'
 
+# 3. ALLOWED_HOSTS
 allowed_hosts_env = os.environ.get('DJANGO_ALLOWED_HOSTS', '')
 ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_env.split(',') if host.strip()]
 
@@ -68,14 +70,15 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'fontAnalysis.wsgi.application'
 
+# 4. DATABASES
+DATABASE_URL = os.environ.get('DATABASE_URL')
+if not DATABASE_URL:
+    raise Exception("DATABASE_URL environment variable is not set!")
 DATABASES = {
     'default': dj_database_url.config(
-        default=os.environ.get(
-            'DATABASE_URL_LOCAL_FALLBACK',
-            'postgres://postgres:postgres@localhost:5432/render_local_db_restored'
-        ),
+        default=DATABASE_URL,
         conn_max_age=600,
-        ssl_require=os.environ.get('DJANGO_DB_SSL_REQUIRE', '0') == '1' # Исправлено на '0' для DEBUG по умолчанию, если нужно
+        ssl_require=os.environ.get('DJANGO_DB_SSL_REQUIRE', '0') == '1'
     )
 }
 
@@ -166,6 +169,7 @@ SIMPLE_JWT = {
     "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=1), # Стандартное значение, можно изменить
 }
 
+# 5. HSTS (включить в продакшене)
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_SSL_REDIRECT = True
@@ -173,9 +177,9 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SESSION_COOKIE_HTTPONLY = True
     CSRF_COOKIE_HTTPONLY = True
-    # SECURE_HSTS_SECONDS = 31536000 
-    # SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    # SECURE_HSTS_PRELOAD = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
 
 # --- ИСПРАВЛЕННАЯ И ДОПОЛНЕННАЯ КОНФИГУРАЦИЯ LOGGING ---
 LOGGING = {

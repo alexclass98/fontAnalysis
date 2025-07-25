@@ -15,7 +15,7 @@ from .nlp_processor import (
     NLPProcessingDirector,
     NLPAnalysisResult,
     get_sentence_transformer,
-    _sentence_transformer_model_name
+    SBERT_MODEL_NAME
 )
 from .gateway import AssociationFinder_ForRowData
 
@@ -205,46 +205,41 @@ class StudyView(APIView):
 class GraphView(View):
     def get(self, request):
         nlp_params = get_nlp_params_from_request(request.GET)
-        
         try:
-            all_association_gateways = AssociationFinder_ForRowData.find_all_valid_for_graph()
+            qs = Association.objects.select_related('cipher').filter(
+                reaction_description__isnull=False
+            ).exclude(reaction_description__exact='').values_list(
+                'cipher__result', 'reaction_description'
+            )
         except Exception as e:
-            logger.error(f"GraphView: Ошибка при получении данных из AssociationFinder_ForRowData: {e}")
+            logger.error(f"GraphView: Ошибка при получении данных: {e}")
             return JsonResponse({"error": "Не удалось получить данные об ассоциациях"}, status=500)
 
-        frequency = {}
         nlp_builder = AdvancedTextProcessorBuilder()
         nlp_director = NLPProcessingDirector(builder=nlp_builder)
+        nlp_cache = {}
+        frequency = Counter()
 
-        for assoc_gw in all_association_gateways:
-            font_name = assoc_gw.get_cipher_result()
-            original_reaction_desc = assoc_gw.get_reaction_description()
-
-            if not font_name or not original_reaction_desc:
-                logger.warning(f"GraphView: Пропущена ассоциация (ID: {assoc_gw.association_id}) из-за отсутствия font_name или original_reaction_desc.")
+        for font_name, reaction_desc in qs:
+            if not font_name or not reaction_desc:
                 continue
-            
-            analysis_result: NLPAnalysisResult = nlp_director.construct_custom_analysis(
-                text=original_reaction_desc, **nlp_params
-            )
-            processed_desc_for_graph = analysis_result.grouping_key if analysis_result.grouping_key is not None else ""
-            
-            if not processed_desc_for_graph: 
-                if analysis_result.lemmas:
-                    processed_desc_for_graph = " ".join(sorted(list(set(analysis_result.lemmas))))
-                elif analysis_result.tokens:
-                    processed_desc_for_graph = " ".join(sorted(list(set(analysis_result.tokens))))
-                else:
-                    processed_desc_for_graph = original_reaction_desc[:50]
-            
-            if not processed_desc_for_graph:
-                logger.warning(f"GraphView: Пропущена ассоциация (ID: {assoc_gw.association_id}) после NLP из-за отсутствия processed_desc: {original_reaction_desc}")
-                continue
+            if reaction_desc not in nlp_cache:
+                analysis_result = nlp_director.construct_custom_analysis(
+                    text=reaction_desc, **nlp_params
+                )
+                processed_desc = analysis_result.grouping_key or ""
+                nlp_cache[reaction_desc] = processed_desc
+            else:
+                processed_desc = nlp_cache[reaction_desc]
+            if not processed_desc:
+                processed_desc = reaction_desc[:50]
+            key = (font_name, processed_desc)
+            frequency[key] += 1
 
-            key = (font_name, processed_desc_for_graph)
-            frequency[key] = frequency.get(key, 0) + 1
-            
-        data = [{'name': name, 'description': desc, 'count': count} for (name, desc), count in frequency.items()]
+        data = [
+            {'name': name, 'description': desc, 'count': count}
+            for (name, desc), count in frequency.items()
+        ]
         return JsonResponse(data, safe=False)
 
 class AssociationSearchView(APIView):
@@ -541,7 +536,7 @@ class NLPAnalysisView(APIView):
 
     def _get_processing_variants(self, text_to_analyze, nlp_director, nlp_builder):
         analysis_variants = []
-        sbert_model_name_val = _sentence_transformer_model_name
+        sbert_model_name_val = SBERT_MODEL_NAME
         sbert_available = get_sentence_transformer() is not None
         rwn_available = nlp_builder._get_rwn_local_instance() is not None
 

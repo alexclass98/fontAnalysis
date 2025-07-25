@@ -8,26 +8,27 @@ from pymorphy2 import MorphAnalyzer
 from ruwordnet import RuWordNet
 from sentence_transformers import SentenceTransformer
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Используем только логгер mainapp
+logger = logging.getLogger('mainapp')
+
+SBERT_MODEL_NAME = 'paraphrase-multilingual-MiniLM-L12-v2'
 
 _sentence_transformer_model = None
-_sentence_transformer_model_name = 'paraphrase-multilingual-MiniLM-L12-v2'
 _sentence_transformer_init_error = None
 
-def get_sentence_transformer():
+def get_sentence_transformer() -> Optional[SentenceTransformer]:
+    """
+    Возвращает загруженную модель SentenceTransformer или None, если возникла ошибка.
+    """
     global _sentence_transformer_model, _sentence_transformer_init_error
     if _sentence_transformer_model is None and _sentence_transformer_init_error is None:
         try:
-            logger.info(f"Загрузка модели SentenceTransformer: {_sentence_transformer_model_name}...")
-            _sentence_transformer_model = SentenceTransformer(_sentence_transformer_model_name)
-            logger.info(f"Модель SentenceTransformer '{_sentence_transformer_model_name}' успешно загружена.")
+            logger.info(f"Загрузка модели SentenceTransformer: {SBERT_MODEL_NAME}...")
+            _sentence_transformer_model = SentenceTransformer(SBERT_MODEL_NAME)
+            logger.info(f"Модель SentenceTransformer '{SBERT_MODEL_NAME}' успешно загружена.")
         except Exception as e:
             _sentence_transformer_init_error = e
-            logger.error(f"Ошибка загрузки модели SentenceTransformer '{_sentence_transformer_model_name}': {e}")
+            logger.error(f"Ошибка загрузки модели SentenceTransformer '{SBERT_MODEL_NAME}': {e}")
             _sentence_transformer_model = None
     if _sentence_transformer_init_error and _sentence_transformer_model is None:
         pass
@@ -35,6 +36,9 @@ def get_sentence_transformer():
 
 @dataclass
 class NLPAnalysisResult:
+    """
+    Результат NLP анализа текста: токены, леммы, синонимы, эмбеддинги и ключ группировки.
+    """
     original_text: str
     processed_text: Optional[str] = None
     tokens: List[str] = field(default_factory=list)
@@ -85,6 +89,9 @@ class ITextProcessorBuilder(metaclass=abc.ABCMeta):
     def get_result(self) -> NLPAnalysisResult: pass
 
 class AdvancedTextProcessorBuilder(ITextProcessorBuilder):
+    """
+    Реализация builder для поэтапной обработки текста: spaCy, pymorphy2, RuWordNet, SBERT.
+    """
     def __init__(self):
         self._nlp_model = load_spacy_model()
         self._morph = MorphAnalyzer()
@@ -110,7 +117,7 @@ class AdvancedTextProcessorBuilder(ITextProcessorBuilder):
         self._tokens_after_stopwords: List[str] = []
         self._result = None
 
-    def set_text(self, text: str):
+    def set_text(self, text: str) -> 'AdvancedTextProcessorBuilder':
         self.reset()
         self._original_text = text
         self._result = NLPAnalysisResult(original_text=self._original_text)
@@ -118,7 +125,7 @@ class AdvancedTextProcessorBuilder(ITextProcessorBuilder):
             logger.warning("AdvancedTextProcessorBuilder: Установлен пустой текст.")
         return self
 
-    def preprocess_text(self):
+    def preprocess_text(self) -> 'AdvancedTextProcessorBuilder':
         if not self._result or not self._original_text:
             logger.warning("preprocess_text: Текст не установлен, предобработка пропущена.")
             return self
@@ -136,7 +143,7 @@ class AdvancedTextProcessorBuilder(ITextProcessorBuilder):
             logger.warning("preprocess_text: Модель spaCy не загружена, обработка spaCy Doc пропущена.")
         return self
 
-    def tokenize(self):
+    def tokenize(self) -> 'AdvancedTextProcessorBuilder':
         if not self._result: return self
         if not self._doc:
             if self._result.processed_text:
@@ -149,7 +156,7 @@ class AdvancedTextProcessorBuilder(ITextProcessorBuilder):
         self._result.tokens = [token.text for token in self._doc if token.is_alpha]
         return self
 
-    def remove_stopwords(self):
+    def remove_stopwords(self) -> 'AdvancedTextProcessorBuilder':
         if not self._result: return self
         if not self._doc:
             logger.warning("remove_stopwords: spaCy Doc отсутствует, удаление стоп-слов не может быть выполнено через spaCy.")
@@ -160,7 +167,7 @@ class AdvancedTextProcessorBuilder(ITextProcessorBuilder):
         self._result.tokens = self._tokens_after_stopwords
         return self
 
-    def lemmatize(self):
+    def lemmatize(self) -> 'AdvancedTextProcessorBuilder':
         if not self._result: return self
         
         tokens_to_lemmatize = self._tokens_after_stopwords if self._tokens_after_stopwords else self._result.tokens
@@ -214,7 +221,7 @@ class AdvancedTextProcessorBuilder(ITextProcessorBuilder):
              logger.error(f"Ошибка RuWordNet при обработке леммы '{lemma}': {e}")
         return lemma
 
-    def group_synonyms(self):
+    def group_synonyms(self) -> 'AdvancedTextProcessorBuilder':
         rwn = self._get_rwn_local_instance()
         if not self._result or not self._result.lemmas:
             logger.warning("Группировка синонимов пропущена: леммы отсутствуют.")
@@ -235,7 +242,7 @@ class AdvancedTextProcessorBuilder(ITextProcessorBuilder):
         self._result.synonym_groups = syn_groups_dict
         return self
 
-    def generate_text_embedding(self):
+    def generate_text_embedding(self) -> 'AdvancedTextProcessorBuilder':
         if not self._result:
             logger.warning("generate_text_embedding пропущен: результат не инициализирован."); return self
         if not self._sbert_model:
@@ -266,7 +273,7 @@ class AdvancedTextProcessorBuilder(ITextProcessorBuilder):
         if not self._result: return self
         return self
 
-    def set_grouping_key(self, strategy: str):
+    def set_grouping_key(self, strategy: str) -> 'AdvancedTextProcessorBuilder':
         if not self._result: return self
         
         if strategy == "original": self._result.grouping_key = self._result.original_text
@@ -291,10 +298,13 @@ class AdvancedTextProcessorBuilder(ITextProcessorBuilder):
         return self._result
 
 class NLPProcessingDirector:
+    """
+    Директор для управления процессом NLP-анализа с помощью builder.
+    """
     def __init__(self, builder: ITextProcessorBuilder):
         self._builder = builder
 
-    def set_builder(self, builder: ITextProcessorBuilder):
+    def set_builder(self, builder: ITextProcessorBuilder) -> None:
         self._builder = builder
 
     def construct_custom_analysis(self, text: str, preprocess: bool = True, tokenize_step: bool = True, remove_stops: bool = True, lemmatize_step: bool = True, group_syns: bool = False, gen_text_emb: bool = False, gen_token_embs: bool = False, grouping_strategy: str = "lemmas") -> NLPAnalysisResult:
