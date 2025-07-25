@@ -184,15 +184,29 @@ class StudyView(APIView):
             if (nlp_params_for_save.get("lemmatize_step") or nlp_params_for_save.get("group_syns")) and not nlp_params_for_save.get("tokenize_step"):
                 nlp_params_for_save["tokenize_step"] = True
 
-            analysis_result: NLPAnalysisResult = nlp_director.construct_custom_analysis(text=reaction_description, **nlp_params_for_save)
-            
-            processed_reaction_key = analysis_result.grouping_key if analysis_result.grouping_key is not None else ""
-            if not processed_reaction_key and analysis_result.lemmas:
-                processed_reaction_key = " ".join(sorted(list(set(analysis_result.lemmas))))
-            
+            # --- NLP анализ для кэша ---
+            nlp_result = nlp_director.construct_custom_analysis(
+                text=reaction_description,
+                preprocess=True,
+                tokenize_step=True,
+                remove_stops=True,
+                lemmatize_step=True,
+                group_syns=False,
+                gen_text_emb=True,
+                grouping_strategy='lemmas'
+            )
+            processed_reaction_key = nlp_result.grouping_key if nlp_result.grouping_key is not None else ""
+            if not processed_reaction_key and nlp_result.lemmas:
+                processed_reaction_key = " ".join(sorted(list(set(nlp_result.lemmas))))
+
             association, created = Association.objects.get_or_create(
                 user=user, cipher=cipher, font_weight=font_weight, font_style=font_style, letter_spacing=letter_spacing, font_size=font_size, line_height=line_height,
-                defaults={'reaction_description': reaction_description, 'reaction_lemmas': processed_reaction_key}
+                defaults={
+                    'reaction_description': reaction_description,
+                    'reaction_lemmas': " ".join(nlp_result.lemmas),
+                    'grouping_key_lemmas': nlp_result.grouping_key,
+                    'text_embedding_vector': nlp_result.text_embedding.tolist() if nlp_result.text_embedding is not None else None,
+                }
             )
             if not created:
                  return {"error": "Повторная реакция на ту же вариацию", "skipped": True, "data": study_data}
