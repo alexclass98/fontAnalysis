@@ -1,7 +1,8 @@
 from django.urls import path
 from .views import (
     UserView, RandomCipherView, StudyView, GraphView, AssociationSearchView, 
-    NLPAnalysisView, AllAssociationsNLPAnalysisView
+    NLPAnalysisView, AllAssociationsNLPAnalysisView, AllAssociationsForNLPView,
+    filtered_associations_for_nlp, fast_grouped_associations
 )
 from rest_framework_simplejwt.views import TokenRefreshView
 
@@ -17,4 +18,9 @@ urlpatterns = [
     path('associations/search/', AssociationSearchView.as_view(), name='association-search'),
     path('nlp/analyze-text/', NLPAnalysisView.as_view(), name='nlp-analyze-text'),
     path('nlp/analyze-all-associations/', AllAssociationsNLPAnalysisView.as_view(), name='nlp-analyze-all-associations'),
+    path('nlp/all-associations-full/', AllAssociationsForNLPView.as_view(), name='all_associations_nlp_full'),
+    path('nlp/filtered-associations/', filtered_associations_for_nlp, name='filtered_associations_nlp'),
+]
+urlpatterns += [
+    path('nlp/fast-grouped/', fast_grouped_associations, name='fast_grouped_associations'),
 ]

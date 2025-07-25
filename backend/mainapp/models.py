@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.contrib.postgres.fields import ArrayField
 
 User = get_user_model()
 
@@ -62,6 +63,8 @@ class Association(models.Model):
     cipher = models.ForeignKey(Cipher, on_delete=models.CASCADE, related_name='cipher_associations')
     reaction_description = models.TextField(blank=True, null=True, db_index=True)
     reaction_lemmas = models.TextField(blank=True, null=True, db_index=True)
+    grouping_key_lemmas = models.TextField(blank=True, null=True, db_index=True)
+    text_embedding_vector = ArrayField(models.FloatField(), size=384, blank=True, null=True)
     font_weight = models.IntegerField(choices=FontWeight.choices, default=FontWeight.REGULAR)
     font_style = models.CharField(max_length=10, choices=FontStyle.choices, default=FontStyle.NORMAL)
     letter_spacing = models.IntegerField(default=0)

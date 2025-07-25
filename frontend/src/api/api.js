@@ -186,4 +186,19 @@ export const analyzeAllAssociationsNLP = async (page = 1, pageSize = 5) => {
   return response.data;
 };
 
+export const getAllAssociationsForNLP = async () => {
+  const response = await API.get("/nlp/all-associations-full/");
+  return response.data;
+};
+
+export const getFilteredAssociationsForNLP = async (params) => {
+  const response = await API.get("/nlp/filtered-associations/", { params });
+  return response.data;
+};
+
+export const getFastGroupedAssociations = async (params) => {
+  const response = await API.get("/nlp/fast-grouped/", { params });
+  return response.data;
+};
+
 export default API;

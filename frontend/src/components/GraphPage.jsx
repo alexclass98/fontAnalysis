@@ -3,7 +3,6 @@ import React, {
   useState,
   useRef,
   useCallback,
-  useMemo,
 } from "react";
 import { getGraphData, findAssociationsByReaction } from "../api/api";
 import { useDispatch } from "react-redux";
@@ -18,7 +17,6 @@ import {
   TextField,
   Divider,
   List,
-  ListItem,
   ListItemText,
   ListItemButton,
   Button,
@@ -52,7 +50,6 @@ import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
 import HubIcon from "@mui/icons-material/Hub";
 import BuildIcon from "@mui/icons-material/Build";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import { Network } from "vis-network/standalone/umd/vis-network.min";
 import "vis-network/styles/vis-network.css";
 import { useDebouncedCallback } from "use-debounce";
@@ -512,157 +509,168 @@ const GraphPage = () => {
 
   // Виртуализированный список результатов поиска
   const SearchResultsList = ({
-    results,
+    results = [],
     onResultClick,
     searchUseEmbeddings,
   }) => {
-    const Row = ({ index, style }) => {
-      const result = results[index];
-      if (!result) return null;
-      const {
-        details,
-        best_reaction_text,
-        best_reaction_relevance_percentage,
-        best_reaction_frequency,
-        total_associations_in_variation,
-        aggregated_by_font_only,
-        relative_frequency_percentage,
-        similarity_score_debug,
-      } = result;
-      const primaryText =
-        aggregated_by_font_only && !searchUseEmbeddings
-          ? details?.cipher_name ||
-            (details?.cipher && details?.cipher.result) ||
-            "N/A"
-          : formatVariationDetails(details);
-      const bestReactionDisplay =
-        typeof best_reaction_text === "string" && best_reaction_text !== "N/A"
-          ? `"${best_reaction_text.substring(0, 50)}${
-              best_reaction_text.length > 50 ? "..." : ""
-            }"`
-          : "(нет данных о реакции)";
-      let secondaryTextLines = [];
-      if (searchUseEmbeddings) {
-        const similarityPercent =
-          typeof best_reaction_relevance_percentage === "number"
-            ? best_reaction_relevance_percentage.toFixed(1)
-            : "N/A";
-        secondaryTextLines.push(
-          <Typography component="span" variant="caption" display="block">
-            <strong>Сходство: {similarityPercent}%</strong>
-          </Typography>
-        );
-        secondaryTextLines.push(
-          <Typography
-            component="span"
-            variant="caption"
-            display="block"
-            title={best_reaction_text}
-          >
-            Реакция: {bestReactionDisplay}
-          </Typography>
-        );
-        if (typeof similarity_score_debug === "number")
-          secondaryTextLines.push(
-            <Typography
-              component="span"
-              variant="caption"
-              color="text.secondary"
-              display="block"
-            >
-              (Raw score: {similarity_score_debug.toFixed(4)})
-            </Typography>
-          );
-      } else {
-        const displayPercentageText =
-          typeof relative_frequency_percentage === "number"
-            ? relative_frequency_percentage.toFixed(1)
-            : "N/A";
-        const relevanceToQueryText =
-          typeof best_reaction_relevance_percentage === "number"
-            ? best_reaction_relevance_percentage.toFixed(1)
-            : "0.0";
-        const frequencyText =
-          typeof best_reaction_frequency === "number"
-            ? best_reaction_frequency
-            : "0";
-        const totalInVariationText =
-          typeof total_associations_in_variation === "number"
-            ? total_associations_in_variation
-            : "0";
-        secondaryTextLines.push(
-          <Typography component="span" variant="caption" display="block">
-            Популярность (отн. лидера): {displayPercentageText}% (частота:{" "}
-            {frequencyText})
-          </Typography>
-        );
-        secondaryTextLines.push(
-          <Typography
-            component="span"
-            variant="caption"
-            display="block"
-            title={best_reaction_text}
-          >
-            Лучшая реакция: {bestReactionDisplay}
-          </Typography>
-        );
-        secondaryTextLines.push(
-          <Typography component="span" variant="caption" display="block">
-            Релевантность запросу: {relevanceToQueryText}% | Всего реакций на
-            шрифт: {totalInVariationText}
-          </Typography>
-        );
-      }
-      const secondaryContent = (
-        <>
-          {secondaryTextLines.map((line, i) => (
-            <React.Fragment key={i}>{line}</React.Fragment>
-          ))}
-        </>
-      );
+    // Для отладки
+    console.log("SearchResultsList results:", results);
+    if (!Array.isArray(results)) {
       return (
-        <div style={style}>
-          <ListItemButton
-            key={details?.id || `search-result-${index}`}
-            sx={{
-              px: 1,
-              py: 0.5,
-              "&:hover": { bgcolor: "action.hover" },
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-start",
-              borderBottom: "1px solid #f0f0f0",
-            }}
-            onClick={() => onResultClick(result)}
-          >
-            <ListItemText
-              primary={primaryText}
-              secondary={secondaryContent}
-              primaryTypographyProps={{
-                variant: "body2",
-                noWrap: true,
-                title: primaryText,
-                style: { fontWeight: 500, marginBottom: "2px" },
-              }}
-              secondaryTypographyProps={{
-                component: "div",
-                variant: "caption",
-                style: { lineHeight: "1.4" },
-              }}
-              sx={{ my: 0, width: "100%" }}
-            />
-          </ListItemButton>
-        </div>
+        <Typography color="error">
+          Ошибка: результаты поиска не являются массивом!
+        </Typography>
       );
-    };
+    }
+    if (results.length === 0) {
+      return (
+        <Typography
+          variant="caption"
+          sx={{ p: 1, display: "block", textAlign: "center" }}
+        >
+          Нет результатов для отображения.
+        </Typography>
+      );
+    }
     return (
-      <List
-        height={300}
-        itemCount={results.length}
-        itemSize={60}
-        width={"100%"}
-      >
-        {Row}
+      <List dense disablePadding>
+        {results.map((result, index) => {
+          if (!result) return null;
+          const {
+            details,
+            best_reaction_text,
+            best_reaction_relevance_percentage,
+            best_reaction_frequency,
+            total_associations_in_variation,
+            aggregated_by_font_only,
+            relative_frequency_percentage,
+            similarity_score_debug,
+          } = result;
+          const primaryText =
+            aggregated_by_font_only && !searchUseEmbeddings
+              ? details?.cipher_name ||
+                (details?.cipher && details?.cipher.result) ||
+                "N/A"
+              : formatVariationDetails(details);
+          const bestReactionDisplay =
+            typeof best_reaction_text === "string" &&
+            best_reaction_text !== "N/A"
+              ? `"${best_reaction_text.substring(0, 50)}${
+                  best_reaction_text.length > 50 ? "..." : ""
+                }"`
+              : "(нет данных о реакции)";
+          let secondaryTextLines = [];
+          if (searchUseEmbeddings) {
+            const similarityPercent =
+              typeof best_reaction_relevance_percentage === "number"
+                ? best_reaction_relevance_percentage.toFixed(1)
+                : "N/A";
+            secondaryTextLines.push(
+              <Typography component="span" variant="caption" display="block">
+                <strong>Сходство: {similarityPercent}%</strong>
+              </Typography>
+            );
+            secondaryTextLines.push(
+              <Typography
+                component="span"
+                variant="caption"
+                display="block"
+                title={best_reaction_text}
+              >
+                Реакция: {bestReactionDisplay}
+              </Typography>
+            );
+            if (typeof similarity_score_debug === "number")
+              secondaryTextLines.push(
+                <Typography
+                  component="span"
+                  variant="caption"
+                  color="text.secondary"
+                  display="block"
+                >
+                  (Raw score: {similarity_score_debug.toFixed(4)})
+                </Typography>
+              );
+          } else {
+            const displayPercentageText =
+              typeof relative_frequency_percentage === "number"
+                ? relative_frequency_percentage.toFixed(1)
+                : "N/A";
+            const relevanceToQueryText =
+              typeof best_reaction_relevance_percentage === "number"
+                ? best_reaction_relevance_percentage.toFixed(1)
+                : "0.0";
+            const frequencyText =
+              typeof best_reaction_frequency === "number"
+                ? best_reaction_frequency
+                : "0";
+            const totalInVariationText =
+              typeof total_associations_in_variation === "number"
+                ? total_associations_in_variation
+                : "0";
+            secondaryTextLines.push(
+              <Typography component="span" variant="caption" display="block">
+                Популярность (отн. лидера): {displayPercentageText}% (частота:{" "}
+                {frequencyText})
+              </Typography>
+            );
+            secondaryTextLines.push(
+              <Typography
+                component="span"
+                variant="caption"
+                display="block"
+                title={best_reaction_text}
+              >
+                Лучшая реакция: {bestReactionDisplay}
+              </Typography>
+            );
+            secondaryTextLines.push(
+              <Typography component="span" variant="caption" display="block">
+                Релевантность запросу: {relevanceToQueryText}% | Всего реакций
+                на шрифт: {totalInVariationText}
+              </Typography>
+            );
+          }
+          const secondaryContent = (
+            <>
+              {secondaryTextLines.map((line, i) => (
+                <React.Fragment key={i}>{line}</React.Fragment>
+              ))}
+            </>
+          );
+          return (
+            <ListItemButton
+              key={details?.id || `search-result-${index}`}
+              sx={{
+                px: 1,
+                py: 0.5,
+                "&:hover": { bgcolor: "action.hover" },
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-start",
+                borderBottom: "1px solid #f0f0f0",
+              }}
+              onClick={() => onResultClick(result)}
+            >
+              <ListItemText
+                primary={primaryText}
+                secondary={secondaryContent}
+                primaryTypographyProps={{
+                  variant: "body2",
+                  noWrap: true,
+                  title: primaryText,
+                  style: { fontWeight: 500, marginBottom: "2px" },
+                }}
+                secondaryTypographyProps={{
+                  component: "div",
+                  variant: "caption",
+                  style: { lineHeight: "1.4" },
+                }}
+                sx={{ my: 0, width: "100%" }}
+              />
+            </ListItemButton>
+          );
+        })}
       </List>
     );
   };
@@ -1182,17 +1190,6 @@ const GraphPage = () => {
                 onResultClick={handleResultClick}
                 searchUseEmbeddings={searchUseEmbeddings}
               />
-              {!searchLoading &&
-                searchResults.length === 0 &&
-                !searchError &&
-                searchTerm && (
-                  <Typography
-                    variant="caption"
-                    sx={{ p: 1, display: "block", textAlign: "center" }}
-                  >
-                    Результатов нет. Попробуйте изменить запрос или настройки.
-                  </Typography>
-                )}
             </Box>
             <Divider sx={{ my: 2 }} />
             <Typography variant="h6" gutterBottom>

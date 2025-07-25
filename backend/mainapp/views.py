@@ -1,12 +1,13 @@
 from django.http import JsonResponse
 from django.views import View
 from django.contrib.auth import get_user_model, authenticate
-from django.db.models import Count, Q, F, ExpressionWrapper, FloatField, Value
+from django.db.models import Count, Q, F, ExpressionWrapper, FloatField, Value, Min
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from rest_framework import status
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.decorators import api_view
 
 from .models import Study, Cipher, Association, Administrator, Reaction
 from .serializers import RegisterSerializer, LoginSerializer, CipherSerializer, AssociationSerializer, CustomTokenObtainPairSerializer
@@ -393,14 +394,19 @@ class AssociationSearchView(APIView):
 
             num_query_terms = len(search_terms_list)
 
-            q_objects = Q()
-            if multi_word_logic == 'AND':
-                for term in search_terms_list:
-                    q_objects &= Q(reaction_lemmas__icontains=term)
-            else: 
-                for term in search_terms_list:
-                    q_objects |= Q(reaction_lemmas__icontains=term)
-            
+            # Формируем Q-объект для поиска по всем словам корректно
+            if search_terms_list:
+                if multi_word_logic == 'AND':
+                    q_objects = Q(reaction_lemmas__icontains=search_terms_list[0])
+                    for term in search_terms_list[1:]:
+                        q_objects &= Q(reaction_lemmas__icontains=term)
+                else:
+                    q_objects = Q(reaction_lemmas__icontains=search_terms_list[0])
+                    for term in search_terms_list[1:]:
+                        q_objects |= Q(reaction_lemmas__icontains=term)
+            else:
+                q_objects = Q()
+
             if not q_objects and search_query_original: 
                 q_objects = Q(reaction_description__icontains=search_query_original)
             elif not q_objects: 
@@ -702,3 +708,179 @@ class AllAssociationsNLPAnalysisView(APIView):
             })
             
         return paginator.get_paginated_response(results_on_page)
+
+class AllAssociationsForNLPView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        nlp_builder = AdvancedTextProcessorBuilder()
+        nlp_director = NLPProcessingDirector(builder=nlp_builder)
+        temp_nlp_analysis_view = NLPAnalysisView()
+        
+        associations_qs = Association.objects.select_related('cipher', 'user').filter(
+            reaction_description__isnull=False
+        ).exclude(reaction_description__exact='').order_by('-created_at')
+        
+        results = []
+        for assoc in associations_qs:
+            if not assoc.reaction_description or not assoc.reaction_description.strip():
+                continue
+
+            processing_variants = temp_nlp_analysis_view._get_processing_variants(
+                assoc.reaction_description, nlp_director, nlp_builder
+            )
+            
+            results.append({
+                "association_id": assoc.id,
+                "user_username": assoc.user.username if assoc.user else "N/A",
+                "cipher_name": assoc.cipher.result if assoc.cipher else "N/A",
+                "original_reaction_text": assoc.reaction_description,
+                "font_details": assoc.variation_details,
+                "processing_variants": processing_variants
+            })
+            
+        return Response(results, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+def filtered_associations_for_nlp(request):
+    font = request.GET.get('font')
+    user = request.GET.get('user')
+    search = request.GET.get('search')
+    limit = int(request.GET.get('limit', 200))
+    grouping_strategy = request.GET.get('grouping_strategy', 'lemmas')
+
+    qs = Association.objects.select_related('cipher', 'user').filter(
+        reaction_description__isnull=False
+    ).exclude(reaction_description__exact='').order_by('-created_at')
+
+    if font:
+        qs = qs.filter(cipher__result=font)
+    if user:
+        qs = qs.filter(user__username=user)
+    if search:
+        qs = qs.filter(reaction_description__icontains=search)
+
+    nlp_builder = AdvancedTextProcessorBuilder()
+    nlp_director = NLPProcessingDirector(builder=nlp_builder)
+    temp_nlp_analysis_view = NLPAnalysisView()
+
+    results = []
+    count = 0
+    for assoc in qs:
+        processing_variants = temp_nlp_analysis_view._get_processing_variants(
+            assoc.reaction_description, nlp_director, nlp_builder
+        )
+        # ищем вариант с эмбеддингом
+        has_embedding = any(
+            v.get('result', {}).get('text_embedding_vector')
+            for v in processing_variants
+        )
+        if not has_embedding:
+            continue
+        # группировка по стратегии
+        group_variant = None
+        for v in processing_variants:
+            if grouping_strategy == 'original' and 'Только токенизация' in v['name']:
+                group_variant = v
+            elif grouping_strategy == 'processed' and 'Токенизация + Удаление стоп-слов' in v['name']:
+                group_variant = v
+            elif grouping_strategy == 'lemmas' and 'Лемматизация' in v['name']:
+                group_variant = v
+            elif grouping_strategy == 'synonyms' and 'Группировка синонимов' in v['name']:
+                group_variant = v
+        results.append({
+            "association_id": assoc.id,
+            "user_username": assoc.user.username if assoc.user else "N/A",
+            "cipher_name": assoc.cipher.result if assoc.cipher else "N/A",
+            "original_reaction_text": assoc.reaction_description,
+            "font_details": assoc.variation_details,
+            "processing_variants": processing_variants,
+            "grouping_key": group_variant['result']['grouping_key'] if group_variant and 'result' in group_variant and 'grouping_key' in group_variant['result'] else assoc.reaction_description
+        })
+        count += 1
+        if count >= limit:
+            break
+    return Response({'results': results, 'count': count})
+
+@api_view(['GET'])
+def fast_grouped_associations(request):
+    font = request.GET.get('font')
+    user = request.GET.get('user')
+    search = request.GET.get('search')
+    grouping_strategy = request.GET.get('grouping_strategy', 'lemmas')
+    limit = request.GET.get('limit')
+    if limit is not None:
+        try:
+            limit = int(limit)
+        except Exception:
+            limit = None
+
+    qs = Association.objects.select_related('user', 'cipher').all()
+    if font:
+        qs = qs.filter(cipher__result=font)
+    if user:
+        qs = qs.filter(user__username=user)
+    if search:
+        qs = qs.filter(reaction_description__icontains=search)
+    qs = qs.exclude(grouping_key_lemmas__isnull=True).exclude(grouping_key_lemmas__exact='')
+
+    group_field = 'grouping_key_lemmas'
+    grouped = qs.values(group_field).annotate(
+        count=Count('id'),
+        example_id=Min('id')
+    ).order_by('-count')
+    if limit:
+        grouped = grouped[:limit]
+
+    # Получаем все ассоциации, попавшие в группы
+    example_ids = [g['example_id'] for g in grouped]
+    assoc_qs = Association.objects.filter(id__in=example_ids)
+    id_to_embedding = {a.id: a.text_embedding_vector for a in assoc_qs}
+    id_to_user = {a.id: a.user.username if a.user else None for a in assoc_qs}
+    id_to_font = {a.id: a.cipher.result if a.cipher else None for a in assoc_qs}
+
+    # Собираем все user_username и cipher_name с частотами по всем ассоциациям, попавшим в группы
+    all_user_counts = {}
+    all_font_counts = {}
+    # Для ассоциаций по группам
+    group_to_assocs = {}
+    for a in qs:
+        key = getattr(a, group_field)
+        if key not in group_to_assocs:
+            group_to_assocs[key] = []
+        group_to_assocs[key].append({
+            'user_username': a.user.username if a.user else None,
+            'reaction_description': a.reaction_description,
+            'cipher_name': a.cipher.result if a.cipher else None,
+        })
+        if a.user and a.user.username:
+            all_user_counts[a.user.username] = all_user_counts.get(a.user.username, 0) + 1
+        if a.cipher and a.cipher.result:
+            all_font_counts[a.cipher.result] = all_font_counts.get(a.cipher.result, 0) + 1
+
+    all_users = [
+        {"user_username": username, "count": count}
+        for username, count in sorted(all_user_counts.items(), key=lambda x: -x[1])
+    ]
+    all_fonts = [
+        {"cipher_name": font, "count": count}
+        for font, count in sorted(all_font_counts.items(), key=lambda x: -x[1])
+    ]
+
+    results = []
+    for g in grouped:
+        group_key = g[group_field]
+        results.append({
+            'grouping_key': group_key,
+            'count': g['count'],
+            'embedding': id_to_embedding.get(g['example_id']),
+            'user_username': id_to_user.get(g['example_id']),
+            'cipher_name': id_to_font.get(g['example_id']),
+            'associations': group_to_assocs.get(group_key, []),
+        })
+    return Response({
+        'results': results,
+        'count': len(results),
+        'all_users': all_users,
+        'all_fonts': all_fonts,
+    })
