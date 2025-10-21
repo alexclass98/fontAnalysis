@@ -1,0 +1,80 @@
+[
+  {
+    "model": "auth.user",
+    "pk": 1,
+    "fields": {
+      "password": "pbkdf2_sha256$260000$dummy$dummy",
+      "last_login": null,
+      "is_superuser": true,
+      "username": "admin",
+      "first_name": "Admin",
+      "last_name": "User",
+      "email": "admin@example.com",
+      "is_staff": true,
+      "is_active": true,
+      "date_joined": "2024-01-01T00:00:00Z",
+      "groups": [],
+      "user_permissions": []
+    }
+  },
+  {
+    "model": "mainapp.cipher",
+    "pk": 1,
+    "fields": {
+      "result": "Тест 1"
+    }
+  },
+  {
+    "model": "mainapp.cipher",
+    "pk": 2,
+    "fields": {
+      "result": "Тест 2"
+    }
+  },
+  {
+    "model": "mainapp.cipher",
+    "pk": 3,
+    "fields": {
+      "result": "Тест 3"
+    }
+  },
+  {
+    "model": "mainapp.reaction",
+    "pk": 1,
+    "fields": {
+      "name": "Радость",
+      "description": "Положительная эмоция"
+    }
+  },
+  {
+    "model": "mainapp.reaction",
+    "pk": 2,
+    "fields": {
+      "name": "Грусть",
+      "description": "Отрицательная эмоция"
+    }
+  },
+  {
+    "model": "mainapp.reaction",
+    "pk": 3,
+    "fields": {
+      "name": "Удивление",
+      "description": "Нейтральная эмоция"
+    }
+  },
+  {
+    "model": "mainapp.administrator",
+    "pk": 1,
+    "fields": {
+      "user": 1
+    }
+  },
+  {
+    "model": "mainapp.graph",
+    "pk": 1,
+    "fields": {
+      "cipher_count": 3,
+      "administrator": 1
+    }
+  }
+]
