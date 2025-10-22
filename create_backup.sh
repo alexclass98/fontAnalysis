@@ -1,0 +1,2 @@
+docker compose exec db bash -c 'pg_dump -U $POSTGRES_USER -d render_local_db_restored --format=plain --clean --if-exists --no-owner --no-privileges > /backup/backup_$1.sql && echo \"Backup created: /backup/backup_$1.sql\"' &&
+docker cp fontanalysis-db-1:/backup/backup_$1.sql ./db/backup/backup_$1.sql
