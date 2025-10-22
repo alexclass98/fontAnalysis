@@ -37,7 +37,7 @@ RUN mkdir -p staticfiles
 RUN python manage.py collectstatic --noinput
 
 # Открываем порт
-EXPOSE 8000
+EXPOSE 8888
 
 # Команда запуска
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "120", "--keep-alive", "5", "fontAnalysis.wsgi:application"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8888", "--workers", "3", "--timeout", "120", "--keep-alive", "5", "fontAnalysis.wsgi:application"]

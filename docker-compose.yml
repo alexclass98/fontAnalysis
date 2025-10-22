@@ -1,4 +1,3 @@
-version: "3.8"
 
 services:
   # База данных PostgreSQL
@@ -13,8 +12,10 @@ services:
       - ./render_local_db_restored.dump:/docker-entrypoint-initdb.d/init.dump
       - ./db/backup/backup_2110251.sql:/backup/backup_2110251.sql
       - ./super_script.sh:/super_script.sh
+    networks:
+      - net-wok
     ports:
-      - "5432:5432"
+      - "${HOST:-127.0.0.1}:5439:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -30,11 +31,13 @@ services:
       - DEBUG=1
       - SECRET_KEY=your-secret-key-here-change-in-production
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/render_local_db_restored
-      - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,backend
-      - CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:80,http://127.0.0.1:80
-      - CSRF_TRUSTED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:80,http://127.0.0.1:80
+      - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,backend,91.214.116.7
+      - CORS_ALLOWED_ORIGINS=http://91.214.116.7:3333,http://127.0.0.1:3333,http://localhost:3333,http://127.0.0.1:80,db:5439
+      - CSRF_TRUSTED_ORIGINS=http://91.214.116.7:3333,http://127.0.0.1:3333,http://localhost:3333,http://127.0.0.1:80,db:5439
     ports:
-      - "8000:8000"
+      - "8888:8888"
+    networks:
+      - net-wok
     depends_on:
       db:
         condition: service_healthy
@@ -45,7 +48,7 @@ services:
       sh -c "python manage.py migrate --noinput &&
              python manage.py collectstatic --noinput &&
              python manage.py loaddata fixtures/initial_data.json --verbosity=0 || true &&
-             gunicorn --bind 0.0.0.0:8000 --workers 3 --timeout 120 --keep-alive 5 fontAnalysis.wsgi:application"
+             gunicorn --bind 0.0.0.0:8888 --workers 3 --timeout 120 --keep-alive 5 fontAnalysis.wsgi:application"
 
   # React фронтенд
   frontend:
@@ -53,11 +56,14 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:80"
+      - "3333:80"
     depends_on:
       - backend
     environment:
-      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_API_URL=http://backend:8888
 
 volumes:
   postgres_data:
+
+networks:
+  net-wok: {}
